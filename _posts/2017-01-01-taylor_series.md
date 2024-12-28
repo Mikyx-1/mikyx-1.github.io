@@ -81,7 +81,7 @@ e^x \approx 1 + x + \frac{x^2}{2!}
 $$
 
 
-For $$x = 0.5$$, this gives:
+For $$x = 0.5$$, this gives:  
 $$
 e^{0.5} \approx 1 + 0.5 + \frac{0.5^2}{2} = 1.6458333333333333
 $$
@@ -105,8 +105,8 @@ $$
 R_{m,n}(x) = \frac{P_m(x)}{Q_n(x)}
 $$
 where:
-- $$P_m(x)$$ is a polynomial of degree $m$,
-- $$Q_n(x)$$ is a polynomial of degree $n$, normalized such that $$Q_n(0) = 1$$.
+- $$P_m(x)$$ is a polynomial of degree $$m$$,
+- $$Q_n(x)$$ is a polynomial of degree $$n$$, normalized such that $$Q_n(0) = 1$$.
 
 The coefficients of $$P_m(x)$$ and $$Q_n(x)$$ are chosen such that the Taylor series of $$R_{m,n}(x)$$ matches $$f(x)$$ as closely as possible up to $$x^{m+n}$$.
 
