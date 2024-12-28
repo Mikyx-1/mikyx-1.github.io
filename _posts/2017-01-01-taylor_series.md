@@ -184,8 +184,8 @@ With that said, which method will you use for your next problem?
 
 ### References
 
-1. [A better way to think about Taylor series #SoMEpi - Youtube](https://www.youtube.com/watch?v=fMC4qk3S1Lw&pp=ygUpQSBiZXR0ZXIgd2F5IHRvIHRoaW5rIGFib3V0IFRheWxvciBzZXJpZXM%3D)
+1\. [A better way to think about Taylor series #SoMEpi - Youtube](https://www.youtube.com/watch?v=fMC4qk3S1Lw&pp=ygUpQSBiZXR0ZXIgd2F5IHRvIHRoaW5rIGFib3V0IFRheWxvciBzZXJpZXM%3D)
 
-2. [Derivation of Taylor Series Expansion](https://hep.physics.illinois.edu/home/serrede/P435/Lecture_Notes/Derivation_of_Taylor_Series_Expansion.pdf)
+2\. [Derivation of Taylor Series Expansion](https://hep.physics.illinois.edu/home/serrede/P435/Lecture_Notes/Derivation_of_Taylor_Series_Expansion.pdf)
 
-3. [Taylor Series](https://byjus.com/maths/taylor-series/)
+3\. [Taylor Series](https://byjus.com/maths/taylor-series/)
