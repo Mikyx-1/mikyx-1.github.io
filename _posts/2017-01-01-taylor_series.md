@@ -1,5 +1,5 @@
 ---
-title:  "Giải thích chuỗi Taylor và Padé (Taylor Series)"
+title:  "Explain Taylor và Padé series"
 mathjax: true
 layout: post
 categories: media
@@ -69,7 +69,7 @@ However, in some cases where $$\vert f^{(n)}(x_n) \vert \leq n^n$$. Then we will
 
 $$\lim_{n \rightarrow \infty} n^n \times \frac{(x-x_0)^n}{n!} \approx (x-x_0)^n$$
 
-This will converge if $$\vert x - x_0 \vert \leq 1$$. So you better pick $x$ that is within 1 unit from the $$x_0$$. 
+This will converge if $$\vert x - x_0 \vert \leq 1$$. So you better pick $$x$$ that is within 1 unit from the $$x_0$$. 
 
 
 #### 2.3. Example: Exponential Function
@@ -79,13 +79,16 @@ Approximate $$f(x) = e^x$$ at $$x = 0$$:
 $$
 e^x \approx 1 + x + \frac{x^2}{2!}
 $$
+
+
 For $$x = 0.5$$, this gives:
 $$
 e^{0.5} \approx 1 + 0.5 + \frac{0.5^2}{2} = 1.6458333333333333
 $$
 (True value: 1.6487, Error: 0.00288).
 
-For $$x = 1.$$, this gives:
+
+For $$x = 1.$$, this gives:  
 $$
 e^{1} \approx 1 + 1 + \frac{1^2}{2} = 2.6666666666666665
 $$
@@ -181,7 +184,7 @@ With that said, which method will you use for your next problem?
 
 ### References
 
-1. [Derivation of the Taylor Series Part 1](https://www.youtube.com/watch?v=2-X7lqZvjy8)
+1. [A better way to think about Taylor series #SoMEpi - Youtube](https://www.youtube.com/watch?v=fMC4qk3S1Lw&pp=ygUpQSBiZXR0ZXIgd2F5IHRvIHRoaW5rIGFib3V0IFRheWxvciBzZXJpZXM%3D)
 
 2. [Derivation of Taylor Series Expansion](https://hep.physics.illinois.edu/home/serrede/P435/Lecture_Notes/Derivation_of_Taylor_Series_Expansion.pdf)
 
