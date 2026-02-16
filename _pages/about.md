@@ -17,7 +17,7 @@ Currently, I am working as an AI Engineer at a Japanese start-up [MonoRevo Inc.]
 I’m always open to collaborations, discussions, and new opportunities. Feel free to reach out if you’re interested in my research or would like to discuss potential projects.
 
 
-Research interests: 
+**Research interests:** 
 
 **1. Computer Vision:**  I primarily focus on Vision–Language Models (VLMs) and advanced vision architectures, aiming to build both state-of-the-art models and compact, efficient models for low-resource environments, maintaining strong performance while reducing computational cost.
 
