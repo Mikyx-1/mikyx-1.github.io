@@ -11,54 +11,50 @@ redirect_from:
 
 Education
 ======
-* Ph.D in Version Control Theory, GitHub University, 2018 (expected)
-* M.S. in Jekyll, GitHub University, 2014
-* B.S. in GitHub, GitHub University, 2012
+
+* B.Eng. in Automation & Control, Ho Chi Minh University of Technology, VNU-HCM, 2023
 
 Work experience
 ======
-* Spring 2024: Academic Pages Collaborator
-  * GitHub University
-  * Duties includes: Updates and improvements to template
-  * Supervisor: The Users
+* Apr 2023 - Nov 2023: AI Engineer
+  * Bosch Global Software Technologies, Vietnam
+  * Work on: Image processing, Data crawling, Object Detection, Activity Recognition, Edge computing.
+  * Supervisor: Imran Abdul Rahiman
 
-* Fall 2015: Research Assistant
-  * GitHub University
-  * Duties included: Merging pull requests
-  * Supervisor: Professor Hub
+* Nov 2023 - Apr 2025: Computer Vision Engineer
+  * Ftech
+  * Work on: Image segmentation, Image processing, Optimisation. 
+  * Supervisor: Tran Nhat Quang
 
-* Summer 2015: Research Assistant
-  * GitHub University
-  * Duties included: Tagging issues
-  * Supervisor: Professor Git
+* Apr 2025 - Current: AI Engineer
+  * MonoRevo, Inc.
+  * Work on: VLMs, OCR, Similarity Retrieval, Optimisation.
+  * Supervisor: Shunsuke Morimatsu
   
 Skills
 ======
-* Skill 1
-* Skill 2
-  * Sub-skill 2.1
-  * Sub-skill 2.2
-  * Sub-skill 2.3
-* Skill 3
+* Programming languages: Python, C/C++, CUDA, Javascript, SQL.
+* Frameworks: Pytorch, OpenCV, Pandas, Docker, Kafka, ...
+* Languages: Vietnamese, English, Chinese (simplified)
 
-Publications
-======
-  <ul>{% for post in site.publications reversed %}
-    {% include archive-single-cv.html %}
-  {% endfor %}</ul>
-  
-Talks
-======
-  <ul>{% for post in site.talks reversed %}
-    {% include archive-single-talk-cv.html  %}
-  {% endfor %}</ul>
-  
-Teaching
-======
-  <ul>{% for post in site.teaching reversed %}
-    {% include archive-single-cv.html %}
-  {% endfor %}</ul>
-  
-Service and leadership
-======
-* Currently signed in to 43 different slack teams
+<!-- Publications -->
+<!-- ====== -->
+<!--   <ul>{% for post in site.publications reversed %} -->
+<!--     {% include archive-single-cv.html %} -->
+<!--   {% endfor %}</ul> -->
+<!---->
+<!-- Talks -->
+<!-- ====== -->
+<!--   <ul>{% for post in site.talks reversed %} -->
+<!--     {% include archive-single-talk-cv.html  %} -->
+<!--   {% endfor %}</ul> -->
+<!---->
+<!-- Teaching -->
+<!-- ====== -->
+<!--   <ul>{% for post in site.teaching reversed %} -->
+<!--     {% include archive-single-cv.html %} -->
+<!--   {% endfor %}</ul> -->
+<!---->
+<!-- Service and leadership -->
+<!-- ====== -->
+<!-- * Currently signed in to 43 different slack teams -->
