@@ -17,7 +17,7 @@ Xin chào các bạn! Trong bài viết này, mình sẽ hướng dẫn chi ti�
 3. [Thuật Toán NMS Hoạt Động Như Thế Nào?](#3-thuật-toán-nms-hoạt-động-như-thế-nào)
 4. [Implement NMS Từ Đầu](#4-implement-nms-từ-đầu)
 5. [Tips & Best Practices](#5-tips--best-practices)
-6. [FAQ - Câu Hỏi Thường Gặp](#6-faq---câu-hỏi-thường-gặp)
+6. [FAQs - Câu Hỏi Thường Gặp](#6-faq---câu-hỏi-thường-gặp)
 
 ---
 
