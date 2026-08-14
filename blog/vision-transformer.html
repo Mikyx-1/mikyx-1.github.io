@@ -46,14 +46,18 @@
 Patch:       (N, P×P×C)
 </code></pre></div>
 
-<p>Trong đó:
-- <code>H, W</code> — chiều cao và chiều rộng của ảnh
-- <code>C</code> — số channel (thường là 3 cho RGB)
-- <code>P</code> — patch size (thường là 16)
-- <code>N = (H/P) × (W/P)</code> — số lượng patches (số "từ" trong câu)</p>
-<p>Ví dụ với ảnh ImageNet chuẩn (224×224×3) và patch size 16:
-- Số patch: <code>(224/16) × (224/16) = 14 × 14 = 196 patches</code>
-- Mỗi patch có kích thước: <code>16 × 16 × 3 = 768 chiều</code></p>
+<p>Trong đó:</p>
+<ul>
+<li><code>H, W</code> — chiều cao và chiều rộng của ảnh</li>
+<li><code>C</code> — số channel (thường là 3 cho RGB)</li>
+<li><code>P</code> — patch size (thường là 16)</li>
+<li><code>N = (H/P) × (W/P)</code> — số lượng patches (số "từ" trong câu)</li>
+</ul>
+<p>Ví dụ với ảnh ImageNet chuẩn (224×224×3) và patch size 16:</p>
+<ul>
+<li>Số patch: <code>(224/16) × (224/16) = 14 × 14 = 196 patches</code></li>
+<li>Mỗi patch có kích thước: <code>16 × 16 × 3 = 768 chiều</code></li>
+</ul>
 <h3 id="22-class-token--positional-encoding">2.2 Class Token &amp; Positional Encoding</h3>
 <p>Sau khi có các patches, ViT thêm hai thứ quan trọng:</p>
 <p><strong>Class Token <code>[CLS]</code></strong>: Một token đặc biệt được thêm vào đầu chuỗi, học cách tổng hợp thông tin từ toàn bộ ảnh. Output của token này sẽ được dùng để phân loại (tương tự <code>[CLS]</code> trong BERT).</p>
@@ -133,11 +137,13 @@ Patch:       (N, P×P×C)
         <span class="k">return</span> <span class="n">patches</span>
 </code></pre></div>
 
-<p><strong>Giải thích từng bước:</strong>
-- <code>unfold(2, P, P)</code> — trượt cửa sổ <code>P×P</code> theo chiều H
-- <code>unfold(3, P, P)</code> — trượt theo chiều W
-- <code>permute(0, 2, 3, 1, 4, 5)</code> — sắp xếp lại thành <code>(B, nH, nW, C, P, P)</code>
-- <code>view(B, num_patches, -1)</code> — flatten mỗi patch thành vector 1D</p>
+<p><strong>Giải thích từng bước:</strong></p>
+<ul>
+<li><code>unfold(2, P, P)</code> — trượt cửa sổ <code>P×P</code> theo chiều H</li>
+<li><code>unfold(3, P, P)</code> — trượt theo chiều W</li>
+<li><code>permute(0, 2, 3, 1, 4, 5)</code> — sắp xếp lại thành <code>(B, nH, nW, C, P, P)</code></li>
+<li><code>view(B, num_patches, -1)</code> — flatten mỗi patch thành vector 1D</li>
+</ul>
 <h3 id="43-embedding-layer">4.3 Embedding Layer</h3>
 <p>Chiếu mỗi patch lên không gian <code>latent_size</code> chiều và cộng thêm positional encoding:</p>
 <div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">EmbeddingLayer</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
@@ -245,11 +251,13 @@ Patch:       (N, P×P×C)
         <span class="k">return</span> <span class="n">x</span>
 </code></pre></div>
 
-<p><strong>Các cải tiến so với phiên bản gốc:</strong>
-- Thêm <code>batch_first=True</code> cho <code>MultiheadAttention</code> — input đúng format <code>(B, N, D)</code>
-- Dùng <code>GELU</code> thay vì <code>ReLU</code> trong FFN (đúng với paper gốc)
-- Dropout regularization để giảm overfitting
-- <code>register_buffer</code> cho positional info để tự động chuyển device</p>
+<p><strong>Các cải tiến so với phiên bản gốc:</strong></p>
+<ul>
+<li>Thêm <code>batch_first=True</code> cho <code>MultiheadAttention</code> — input đúng format <code>(B, N, D)</code></li>
+<li>Dùng <code>GELU</code> thay vì <code>ReLU</code> trong FFN (đúng với paper gốc)</li>
+<li>Dropout regularization để giảm overfitting</li>
+<li><code>register_buffer</code> cho positional info để tự động chuyển device</li>
+</ul>
 <hr />
 <h2 id="5-training-trên-cifar-10">5. Training Trên CIFAR-10</h2>
 <div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torchvision</span>

@@ -102,6 +102,42 @@ def kramdown_slugify(value, separator):
     return value.replace(" ", separator)
 
 
+LIST_MARKER = re.compile(r"^([-*+]|\d+\.)\s+\S")
+
+
+def separate_lists(text):
+    """Insert the blank line python-markdown needs before a list.
+
+    Kramdown lets a list interrupt a paragraph directly:
+
+        Trong do:
+        - `H, W` -- chieu cao
+
+    python-markdown does not, and would render the whole thing as one
+    paragraph with stray hyphens. The posts were written against kramdown, so
+    restore the blank line rather than reformat every source file.
+
+    Only a list opening straight after an unindented paragraph line is
+    touched; continuation lines inside an existing list are left alone, so
+    tight lists stay tight.
+    """
+    out, in_fence, prev = [], False, ""
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif (
+            not in_fence
+            and LIST_MARKER.match(line)
+            and prev.strip()
+            and not prev.startswith((" ", "\t"))
+            and not LIST_MARKER.match(prev)
+        ):
+            out.append("")
+        out.append(line)
+        prev = line
+    return "\n".join(out)
+
+
 def is_vietnamese(text):
     """Detect Vietnamese so the post gets the right lang attribute."""
     return bool(re.search(r"[ăâđêôơưĂÂĐÊÔƠƯ]|[ạảấầẩẫậắằẳẵặẹẻẽếềểễệ]", text))
@@ -112,6 +148,7 @@ def render(md_path):
 
     # Posts were written for Jekyll, where images resolve from the site root.
     body = body.replace("](/images/", "](../images/")
+    body = separate_lists(body)
 
     html = markdown.markdown(
         body,
@@ -125,8 +162,6 @@ def render(md_path):
         ],
         extension_configs={
             "codehilite": {"guess_lang": False},
-            # slugify_unicode keeps Vietnamese diacritics in heading ids, so the
-            # hand-written table-of-contents links in the posts still resolve.
             "toc": {"slugify": kramdown_slugify},
         },
     )

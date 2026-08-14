@@ -32,23 +32,27 @@
 <div class="codehilite"><pre><span></span><code>x_center, y_center, width, height, class, confidence_score
 </code></pre></div>
 
-<p>Tuy nhiên, đây là output <strong>đã được hậu xử lý</strong>. Khi bạn convert model sang các format khác như:
-- <strong>ONNX</strong> (cho cross-platform deployment)
-- <strong>TFLite</strong> (cho mobile devices)
-- <strong>TensorRT</strong> (cho NVIDIA GPUs)
-- <strong>OpenVINO</strong> (cho Intel hardware)
-- <strong>CoreML</strong> (cho iOS devices)</p>
+<p>Tuy nhiên, đây là output <strong>đã được hậu xử lý</strong>. Khi bạn convert model sang các format khác như:</p>
+<ul>
+<li><strong>ONNX</strong> (cho cross-platform deployment)</li>
+<li><strong>TFLite</strong> (cho mobile devices)</li>
+<li><strong>TensorRT</strong> (cho NVIDIA GPUs)</li>
+<li><strong>OpenVINO</strong> (cho Intel hardware)</li>
+<li><strong>CoreML</strong> (cho iOS devices)</li>
+</ul>
 <p>Thì output thô của model sẽ có dạng:</p>
 <div class="codehilite"><pre><span></span><code>Shape: (1, 84, 8400) hoặc (1, 8400, 84)
 </code></pre></div>
 
-<p>Trong đó:
-- <strong>8400</strong>: Số lượng detection boxes (anchor points từ các feature maps)
-  - 80×80 = 6,400 (stride 8)
-  - 40×40 = 1,600 (stride 16) 
-  - 20×20 = 400 (stride 32)
-  - <strong>Tổng: 8,400 predictions</strong>
-- <strong>84</strong>: <code>4 tọa độ + 80 classes</code> (với COCO dataset)</p>
+<p>Trong đó:</p>
+<ul>
+<li><strong>8400</strong>: Số lượng detection boxes (anchor points từ các feature maps)</li>
+<li>80×80 = 6,400 (stride 8)</li>
+<li>40×40 = 1,600 (stride 16) </li>
+<li>20×20 = 400 (stride 32)</li>
+<li><strong>Tổng: 8,400 predictions</strong></li>
+<li><strong>84</strong>: <code>4 tọa độ + 80 classes</code> (với COCO dataset)</li>
+</ul>
 <h3 id="12-tại-sao-cần-phải-hiểu-nms">1.2. Tại Sao Cần Phải Hiểu NMS?</h3>
 <p>Khi deploy trên các nền tảng khác nhau:</p>
 <div class="table-wrap"><table>
@@ -105,9 +109,11 @@
 <h3 id="22-ví-dụ-tính-iou">2.2. Ví Dụ Tính IoU</h3>
 <p><img alt="IoU Calculation Example" src="https://viso.ai/wp-content/uploads/2024/01/Illustrative-Example-for-IoU-Calculation.jpg" />
 <em>Hình 3: Ví dụ minh họa tính IoU</em></p>
-<p>Cho 2 boxes:
-- <strong>Box 1</strong>: Góc trái trên (50, 100), góc phải dưới (200, 300)
-- <strong>Box 2</strong>: Góc trái trên (80, 120), góc phải dưới (220, 310)</p>
+<p>Cho 2 boxes:</p>
+<ul>
+<li><strong>Box 1</strong>: Góc trái trên (50, 100), góc phải dưới (200, 300)</li>
+<li><strong>Box 2</strong>: Góc trái trên (80, 120), góc phải dưới (220, 310)</li>
+</ul>
 <p><strong>Bước 1: Tính tọa độ phần giao (Intersection)</strong></p>
 <div class="codehilite"><pre><span></span><code><span class="n">x_left</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">80</span><span class="p">)</span> <span class="o">=</span> <span class="mi">80</span>
 <span class="n">y_top</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">120</span><span class="p">)</span> <span class="o">=</span> <span class="mi">120</span>
@@ -207,10 +213,12 @@
 </tr>
 </tbody>
 </table></div>
-<p><strong>Recommended IoU thresholds:</strong>
-- <strong>0.45 - 0.5</strong>: Cho objects nhỏ, chen chúc (crowded scenes)
-- <strong>0.5 - 0.6</strong>: Cân bằng tốt cho hầu hết trường hợp
-- <strong>0.6 - 0.7</strong>: Cho objects lớn, rời rạc</p>
+<p><strong>Recommended IoU thresholds:</strong></p>
+<ul>
+<li><strong>0.45 - 0.5</strong>: Cho objects nhỏ, chen chúc (crowded scenes)</li>
+<li><strong>0.5 - 0.6</strong>: Cân bằng tốt cho hầu hết trường hợp</li>
+<li><strong>0.6 - 0.7</strong>: Cho objects lớn, rời rạc</li>
+</ul>
 <hr />
 <h2 id="3-thuật-toán-nms-hoạt-động-như-thế-nào">3. Thuật Toán NMS Hoạt Động Như Thế Nào?</h2>
 <h3 id="31-overview---quy-trình-5-bước">3.1. Overview - Quy Trình 5 Bước</h3>
@@ -251,9 +259,11 @@ Output: Final detections (x, y, w, h, class, conf)
 </code></pre></div>
 
 <p><strong>Tại sao các scores không tổng = 1?</strong></p>
-<p>YOLO sử dụng <strong>Sigmoid activation</strong> cho mỗi class (không phải Softmax):
-- Cho phép multi-label detection (1 object có thể thuộc nhiều class)
-- Mỗi class score độc lập: <code>sigmoid(x) ∈ [0, 1]</code></p>
+<p>YOLO sử dụng <strong>Sigmoid activation</strong> cho mỗi class (không phải Softmax):</p>
+<ul>
+<li>Cho phép multi-label detection (1 object có thể thuộc nhiều class)</li>
+<li>Mỗi class score độc lập: <code>sigmoid(x) ∈ [0, 1]</code></li>
+</ul>
 <p>Ví dụ: Một object có thể vừa là "person" (0.9) vừa là "tennis racket" (0.8)</p>
 <h4 id="step-2-extract-class-id--max-confidence"><strong>Step 2: Extract Class ID &amp; Max Confidence</strong></h4>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Trước Step 2</span>
@@ -293,9 +303,11 @@ Output: Final detections (x, y, w, h, class, conf)
 <span class="p">]</span>
 </code></pre></div>
 
-<p><strong>Tại sao phải group by class?</strong>
-- Tránh loại bỏ nhầm detections của các objects khác nhau
-- Ví dụ: Person box và Car box có thể overlap nhưng là 2 objects khác nhau</p>
+<p><strong>Tại sao phải group by class?</strong></p>
+<ul>
+<li>Tránh loại bỏ nhầm detections của các objects khác nhau</li>
+<li>Ví dụ: Person box và Car box có thể overlap nhưng là 2 objects khác nhau</li>
+</ul>
 <h4 id="step-4-apply-nms-per-class-bước-quan-trọng-nhất"><strong>Step 4: Apply NMS Per Class</strong> (Bước quan trọng nhất!)</h4>
 <p><strong>Thuật toán NMS cho 1 class:</strong></p>
 <div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nms_single_class</span><span class="p">(</span><span class="n">detections</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
@@ -1045,9 +1057,11 @@ Output Shape: [1, 84, 8400]
 </tr>
 </tbody>
 </table></div>
-<p><strong>Rule of thumb:</strong>
-- IoU càng <strong>thấp</strong> → càng <strong>aggressive</strong> (loại nhiều boxes)
-- IoU càng <strong>cao</strong> → càng <strong>conservative</strong> (giữ nhiều boxes)</p>
+<p><strong>Rule of thumb:</strong></p>
+<ul>
+<li>IoU càng <strong>thấp</strong> → càng <strong>aggressive</strong> (loại nhiều boxes)</li>
+<li>IoU càng <strong>cao</strong> → càng <strong>conservative</strong> (giữ nhiều boxes)</li>
+</ul>
 <h3 id="53-tối-ưu-performance">5.3. Tối Ưu Performance</h3>
 <h4 id="vectorized-operations"><strong>Vectorized Operations</strong></h4>
 <div class="codehilite"><pre><span></span><code><span class="c1"># ❌ BAD: Loop từng box</span>
@@ -1147,11 +1161,13 @@ Output Shape: [1, 84, 8400]
 
 <p>Trade-off này <strong>đáng giá</strong> vì accuracy cao hơn nhiều.</p>
 <h3 id="q3-làm-sao-để-detect-objects-rất-nhỏ-small-objects">Q3: Làm sao để detect objects rất nhỏ (small objects)?</h3>
-<p><strong>Tips:</strong>
-1. <strong>Giảm <code>conf_threshold</code></strong>: 0.3 - 0.4 thay vì 0.5
-2. <strong>Giảm <code>iou_threshold</code></strong>: 0.4 thay vì 0.5
-3. <strong>Tăng resolution</strong>: Train/inference ở 1280 thay vì 640
-4. <strong>Multi-scale testing</strong>: Inference nhiều scales rồi combine</p>
+<p><strong>Tips:</strong></p>
+<ol>
+<li><strong>Giảm <code>conf_threshold</code></strong>: 0.3 - 0.4 thay vì 0.5</li>
+<li><strong>Giảm <code>iou_threshold</code></strong>: 0.4 thay vì 0.5</li>
+<li><strong>Tăng resolution</strong>: Train/inference ở 1280 thay vì 640</li>
+<li><strong>Multi-scale testing</strong>: Inference nhiều scales rồi combine</li>
+</ol>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Multi-scale inference</span>
 <span class="n">scales</span> <span class="o">=</span> <span class="p">[</span><span class="mi">640</span><span class="p">,</span> <span class="mi">800</span><span class="p">,</span> <span class="mi">1024</span><span class="p">]</span>
 <span class="n">all_detections</span> <span class="o">=</span> <span class="p">[]</span>
@@ -1181,9 +1197,11 @@ Output Shape: [1, 84, 8400]
     <span class="k">return</span> <span class="n">keep_indices</span>
 </code></pre></div>
 
-<p><strong>Soft-NMS tốt hơn cho:</strong>
-- Overlapping objects (people in crowd)
-- Occlusion cases</p>
+<p><strong>Soft-NMS tốt hơn cho:</strong></p>
+<ul>
+<li>Overlapping objects (people in crowd)</li>
+<li>Occlusion cases</li>
+</ul>
 <h3 id="q5-output-của-yolo-có-thể-khác-8400-không">Q5: Output của YOLO có thể khác 8400 không?</h3>
 <p><strong>A:</strong> Có! Phụ thuộc vào kiến trúc:</p>
 <div class="table-wrap"><table>
@@ -1244,9 +1262,11 @@ Output Shape: [1, 84, 8400]
 </code></pre></div>
 
 <h3 id="q7-tại-sao-có-khi-detections-bị-nhấp-nháy-flickering-trong-video">Q7: Tại sao có khi detections bị "nhấp nháy" (flickering) trong video?</h3>
-<p><strong>Nguyên nhân:</strong>
-- Confidence score dao động quanh threshold
-- Boxes không ổn định giữa các frames</p>
+<p><strong>Nguyên nhân:</strong></p>
+<ul>
+<li>Confidence score dao động quanh threshold</li>
+<li>Boxes không ổn định giữa các frames</li>
+</ul>
 <p><strong>Giải pháp:</strong></p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># 1. Temporal smoothing</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">smooth_detections</span><span class="p">(</span><span class="n">current_dets</span><span class="p">,</span> <span class="n">prev_dets</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">):</span>

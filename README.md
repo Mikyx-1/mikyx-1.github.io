@@ -1,8 +1,12 @@
 # mikyx-1.github.io
 
 Personal site. Static HTML/CSS with a small Python build step for blog posts.
-Styled after [joschu.net](http://joschu.net/index.html): Georgia serif, `#444`
-on `#fefefe`, 60em max width, Wikipedia-blue links, dark top nav.
+
+Black on white, no color beyond default link blue. Typography and page
+furniture follow [jondeaton.github.io](https://jondeaton.github.io/): Optima
+(humanist sans), 800px measure, `line-height: 1.5`, a right-aligned pill nav
+over a dashed rule, portrait floated right at 200px, and code in Lucida
+Console. Syntax highlighting is bold/italic only — no color.
 
 ## Layout
 
