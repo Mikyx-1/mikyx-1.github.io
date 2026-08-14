@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explain Non-Maximum Suppression and build it from scratch &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Explain Non-Maximum Suppression and build it from scratch</h2>
+<p class="date">2024-03-23 &middot; Object Detection, Post-processing</p>
+
+<p>Xin chào các bạn! Trong bài viết này, mình sẽ hướng dẫn chi tiết về giải thuật Non-Maximum Suppression (NMS) - một kỹ thuật quan trọng trong khâu post-processing của các mô hình YOLO. Đây là kiến thức bắt buộc khi bạn muốn deploy YOLO model lên production.</p>
+<h2 id="-mục-lục">📑 Mục Lục</h2>
+<ol>
+<li><a href="#1-nms-giải-quyết-vấn-đề-gì">NMS Giải Quyết Vấn Đề Gì?</a></li>
+<li><a href="#2-intersection-over-union-iou">Intersection over Union (IoU)</a></li>
+<li><a href="#3-thuật-toán-nms-hoạt-động-như-thế-nào">Thuật Toán NMS Hoạt Động Như Thế Nào?</a></li>
+<li><a href="#4-implement-nms-từ-đầu">Implement NMS Từ Đầu</a></li>
+<li><a href="#5-tips--best-practices">Tips &amp; Best Practices</a></li>
+<li><a href="#6-faq---câu-hỏi-thường-gặp">FAQs - Câu Hỏi Thường Gặp</a></li>
+</ol>
+<hr />
+<h2 id="1-nms-giải-quyết-vấn-đề-gì">1. NMS Giải Quyết Vấn Đề Gì?</h2>
+<h3 id="11-vấn-đề-khi-deploy-yolo-models">1.1. Vấn Đề Khi Deploy YOLO Models</h3>
+<p>Nếu bạn đã từng sử dụng thư viện <strong>Ultralytics</strong> để chạy YOLOv8, YOLOv5, output mà bạn nhận được thường ở định dạng đã được xử lý sẵn:</p>
+<div class="codehilite"><pre><span></span><code>x_center, y_center, width, height, class, confidence_score
+</code></pre></div>
+
+<p>Tuy nhiên, đây là output <strong>đã được hậu xử lý</strong>. Khi bạn convert model sang các format khác như:
+- <strong>ONNX</strong> (cho cross-platform deployment)
+- <strong>TFLite</strong> (cho mobile devices)
+- <strong>TensorRT</strong> (cho NVIDIA GPUs)
+- <strong>OpenVINO</strong> (cho Intel hardware)
+- <strong>CoreML</strong> (cho iOS devices)</p>
+<p>Thì output thô của model sẽ có dạng:</p>
+<div class="codehilite"><pre><span></span><code>Shape: (1, 84, 8400) hoặc (1, 8400, 84)
+</code></pre></div>
+
+<p>Trong đó:
+- <strong>8400</strong>: Số lượng detection boxes (anchor points từ các feature maps)
+  - 80×80 = 6,400 (stride 8)
+  - 40×40 = 1,600 (stride 16) 
+  - 20×20 = 400 (stride 32)
+  - <strong>Tổng: 8,400 predictions</strong>
+- <strong>84</strong>: <code>4 tọa độ + 80 classes</code> (với COCO dataset)</p>
+<h3 id="12-tại-sao-cần-phải-hiểu-nms">1.2. Tại Sao Cần Phải Hiểu NMS?</h3>
+<p>Khi deploy trên các nền tảng khác nhau:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Ngôn Ngữ</th>
+<th>Cần Implement NMS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web</td>
+<td>JavaScript</td>
+<td>✅ Có</td>
+</tr>
+<tr>
+<td>Mobile (Android)</td>
+<td>Java/Kotlin</td>
+<td>✅ Có</td>
+</tr>
+<tr>
+<td>Mobile (iOS)</td>
+<td>Swift</td>
+<td>✅ Có</td>
+</tr>
+<tr>
+<td>Embedded</td>
+<td>C++</td>
+<td>✅ Có</td>
+</tr>
+<tr>
+<td>Edge Devices</td>
+<td>C/C++</td>
+<td>✅ Có</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Khâu hậu xử lý (post-processing) của tác giả viết bằng Python sẽ KHÔNG được đính kèm</strong> sau khi convert. Điều này buộc bạn phải tự implement lại NMS.</p>
+<h3 id="13-nms-làm-gì">1.3. NMS Làm Gì?</h3>
+<p><img alt="Illustration of NMS Problem" src="https://cdn.analyticsvidhya.com/wp-content/uploads/2020/07/Screenshot-from-2020-07-27-20-37-58.png" />
+<em>Hình 1: Trước NMS (trái) vs Sau NMS (phải)</em></p>
+<p><strong>NMS loại bỏ các bounding boxes trùng lặp và chỉ giữ lại những boxes tốt nhất</strong> cho mỗi object.</p>
+<p>Ví dụ: Khi detect một con chó, model có thể tạo ra 50-100 boxes cho cùng 1 object. NMS sẽ chọn box tốt nhất và loại bỏ các boxes còn lại.</p>
+<hr />
+<h2 id="2-intersection-over-union-iou">2. Intersection over Union (IoU)</h2>
+<p>IoU là nền tảng của thuật toán NMS. Đây là metric đo độ trùng lặp giữa 2 bounding boxes.</p>
+<h3 id="21-công-thức-iou">2.1. Công Thức IoU</h3>
+<p><img alt="IoU Formula" src="https://b2633864.smushcdn.com/2633864/wp-content/uploads/2016/09/iou_equation.png?lossy=2&amp;strip=1&amp;webp=1" />
+<em>Hình 2: Công thức tính IoU</em></p>
+<div class="codehilite"><pre><span></span><code>IoU = Area of Intersection / Area of Union
+</code></pre></div>
+
+<h3 id="22-ví-dụ-tính-iou">2.2. Ví Dụ Tính IoU</h3>
+<p><img alt="IoU Calculation Example" src="https://viso.ai/wp-content/uploads/2024/01/Illustrative-Example-for-IoU-Calculation.jpg" />
+<em>Hình 3: Ví dụ minh họa tính IoU</em></p>
+<p>Cho 2 boxes:
+- <strong>Box 1</strong>: Góc trái trên (50, 100), góc phải dưới (200, 300)
+- <strong>Box 2</strong>: Góc trái trên (80, 120), góc phải dưới (220, 310)</p>
+<p><strong>Bước 1: Tính tọa độ phần giao (Intersection)</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">x_left</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">80</span><span class="p">)</span> <span class="o">=</span> <span class="mi">80</span>
+<span class="n">y_top</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">120</span><span class="p">)</span> <span class="o">=</span> <span class="mi">120</span>
+<span class="n">x_right</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">220</span><span class="p">)</span> <span class="o">=</span> <span class="mi">200</span>
+<span class="n">y_bottom</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">300</span><span class="p">,</span> <span class="mi">310</span><span class="p">)</span> <span class="o">=</span> <span class="mi">300</span>
+</code></pre></div>
+
+<p><strong>Bước 2: Tính diện tích giao</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">intersection_width</span> <span class="o">=</span> <span class="mi">200</span> <span class="o">-</span> <span class="mi">80</span> <span class="o">=</span> <span class="mi">120</span>
+<span class="n">intersection_height</span> <span class="o">=</span> <span class="mi">300</span> <span class="o">-</span> <span class="mi">120</span> <span class="o">=</span> <span class="mi">180</span>
+<span class="n">intersection_area</span> <span class="o">=</span> <span class="mi">120</span> <span class="err">×</span> <span class="mi">180</span> <span class="o">=</span> <span class="mi">21</span><span class="p">,</span><span class="mi">600</span>
+</code></pre></div>
+
+<p><strong>Bước 3: Tính diện tích hợp</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">box1_area</span> <span class="o">=</span> <span class="p">(</span><span class="mi">200</span> <span class="o">-</span> <span class="mi">50</span><span class="p">)</span> <span class="err">×</span> <span class="p">(</span><span class="mi">300</span> <span class="o">-</span> <span class="mi">100</span><span class="p">)</span> <span class="o">=</span> <span class="mi">150</span> <span class="err">×</span> <span class="mi">200</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span><span class="mi">000</span>
+<span class="n">box2_area</span> <span class="o">=</span> <span class="p">(</span><span class="mi">220</span> <span class="o">-</span> <span class="mi">80</span><span class="p">)</span> <span class="err">×</span> <span class="p">(</span><span class="mi">310</span> <span class="o">-</span> <span class="mi">120</span><span class="p">)</span> <span class="o">=</span> <span class="mi">140</span> <span class="err">×</span> <span class="mi">190</span> <span class="o">=</span> <span class="mi">26</span><span class="p">,</span><span class="mi">600</span>
+<span class="n">union_area</span> <span class="o">=</span> <span class="n">box1_area</span> <span class="o">+</span> <span class="n">box2_area</span> <span class="o">-</span> <span class="n">intersection_area</span>
+<span class="n">union_area</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span><span class="mi">000</span> <span class="o">+</span> <span class="mi">26</span><span class="p">,</span><span class="mi">600</span> <span class="o">-</span> <span class="mi">21</span><span class="p">,</span><span class="mi">600</span> <span class="o">=</span> <span class="mi">35</span><span class="p">,</span><span class="mi">000</span>
+</code></pre></div>
+
+<p><strong>Bước 4: Tính IoU</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">IoU</span> <span class="o">=</span> <span class="mi">21</span><span class="p">,</span><span class="mi">600</span> <span class="o">/</span> <span class="mi">35</span><span class="p">,</span><span class="mi">000</span> <span class="o">=</span> <span class="mf">0.617</span> <span class="p">(</span><span class="err">≈</span> <span class="mf">61.7</span><span class="o">%</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="23-code-implementation-iou">2.3. Code Implementation IoU</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">calculate_iou</span><span class="p">(</span><span class="n">box1</span><span class="p">,</span> <span class="n">box2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Tính IoU giữa 2 bounding boxes</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        box1: [x1, y1, x2, y2] - tọa độ góc trái trên và phải dưới</span>
+<span class="sd">        box2: [x1, y1, x2, y2]</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        iou: float - giá trị IoU từ 0 đến 1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Tìm tọa độ vùng giao</span>
+    <span class="n">x_left</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">box2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">y_top</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">box2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">x_right</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">box2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">y_bottom</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">box2</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+
+    <span class="c1"># Kiểm tra có giao không</span>
+    <span class="k">if</span> <span class="n">x_right</span> <span class="o">&lt;</span> <span class="n">x_left</span> <span class="ow">or</span> <span class="n">y_bottom</span> <span class="o">&lt;</span> <span class="n">y_top</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+
+    <span class="c1"># Tính diện tích giao</span>
+    <span class="n">intersection_area</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_right</span> <span class="o">-</span> <span class="n">x_left</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_bottom</span> <span class="o">-</span> <span class="n">y_top</span><span class="p">)</span>
+
+    <span class="c1"># Tính diện tích mỗi box</span>
+    <span class="n">box1_area</span> <span class="o">=</span> <span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">box1</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">box1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="n">box1</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">box2_area</span> <span class="o">=</span> <span class="p">(</span><span class="n">box2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">box2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">box2</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="n">box2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="c1"># Tính diện tích hợp</span>
+    <span class="n">union_area</span> <span class="o">=</span> <span class="n">box1_area</span> <span class="o">+</span> <span class="n">box2_area</span> <span class="o">-</span> <span class="n">intersection_area</span>
+
+    <span class="c1"># Tính IoU</span>
+    <span class="n">iou</span> <span class="o">=</span> <span class="n">intersection_area</span> <span class="o">/</span> <span class="n">union_area</span> <span class="k">if</span> <span class="n">union_area</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+
+    <span class="k">return</span> <span class="n">iou</span>
+
+<span class="c1"># Test function</span>
+<span class="n">box1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">50</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">]</span>
+<span class="n">box2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">80</span><span class="p">,</span> <span class="mi">120</span><span class="p">,</span> <span class="mi">220</span><span class="p">,</span> <span class="mi">310</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;IoU = </span><span class="si">{</span><span class="n">calculate_iou</span><span class="p">(</span><span class="n">box1</span><span class="p">,</span><span class="w"> </span><span class="n">box2</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># Output: IoU = 0.6171</span>
+</code></pre></div>
+
+<h3 id="24-ý-nghĩa-của-iou-threshold">2.4. Ý Nghĩa Của IoU Threshold</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>IoU Value</th>
+<th>Ý Nghĩa</th>
+<th>Quyết Định NMS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.0 - 0.3</td>
+<td>Không trùng hoặc trùng ít</td>
+<td>✅ Giữ cả 2 boxes</td>
+</tr>
+<tr>
+<td>0.3 - 0.5</td>
+<td>Trùng vừa phải</td>
+<td>⚠️ Tùy threshold</td>
+</tr>
+<tr>
+<td>0.5 - 0.7</td>
+<td>Trùng nhiều</td>
+<td>❌ Loại box có conf thấp</td>
+</tr>
+<tr>
+<td>0.7 - 1.0</td>
+<td>Trùng rất nhiều</td>
+<td>❌ Chắc chắn loại</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Recommended IoU thresholds:</strong>
+- <strong>0.45 - 0.5</strong>: Cho objects nhỏ, chen chúc (crowded scenes)
+- <strong>0.5 - 0.6</strong>: Cân bằng tốt cho hầu hết trường hợp
+- <strong>0.6 - 0.7</strong>: Cho objects lớn, rời rạc</p>
+<hr />
+<h2 id="3-thuật-toán-nms-hoạt-động-như-thế-nào">3. Thuật Toán NMS Hoạt Động Như Thế Nào?</h2>
+<h3 id="31-overview---quy-trình-5-bước">3.1. Overview - Quy Trình 5 Bước</h3>
+<div class="codehilite"><pre><span></span><code>Input: 8400 predictions (mỗi prediction có 84 giá trị)
+       ↓
+[Step 1] Filter by Confidence Threshold
+       ↓ (giữ lại ~100-500 boxes)
+[Step 2] Extract Class &amp; Confidence
+       ↓
+[Step 3] Group by Class
+       ↓
+[Step 4] Apply NMS per Class
+       ↓
+[Step 5] Combine Results
+       ↓
+Output: Final detections (x, y, w, h, class, conf)
+</code></pre></div>
+
+<h3 id="32-chi-tiết-từng-bước">3.2. Chi Tiết Từng Bước</h3>
+<h4 id="step-1-lọc-theo-confidence-threshold"><strong>Step 1: Lọc Theo Confidence Threshold</strong></h4>
+<p><strong>Input format</strong>: Mỗi detection có dạng vector 84 giá trị:</p>
+<div class="codehilite"><pre><span></span><code>[x_center, y_center, width, height, score_class0, score_class1, ..., score_class79]
+ ↑________bbox coords_______↑  ↑____________80 class scores_________________↑
+</code></pre></div>
+
+<p><strong>Ví dụ minh họa:</strong></p>
+<p>Giả sử detection vector:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">detection</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span>  <span class="c1"># bbox: x, y, w, h</span>
+             <span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.91</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">]</span>  <span class="c1"># 80 class scores</span>
+</code></pre></div>
+
+<p>Với <code>conf_threshold = 0.5</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">max_score</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">detection</span><span class="p">[</span><span class="mi">4</span><span class="p">:])</span> <span class="o">=</span> <span class="mf">0.91</span>  <span class="c1"># score của class 1 (person)</span>
+<span class="k">if</span> <span class="n">max_score</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">:</span>
+    <span class="n">keep_this_detection</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># ✅ GIỮ LẠI</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">discard_detection</span> <span class="o">=</span> <span class="kc">True</span>    <span class="c1"># ❌ LOẠI BỎ</span>
+</code></pre></div>
+
+<p><strong>Tại sao các scores không tổng = 1?</strong></p>
+<p>YOLO sử dụng <strong>Sigmoid activation</strong> cho mỗi class (không phải Softmax):
+- Cho phép multi-label detection (1 object có thể thuộc nhiều class)
+- Mỗi class score độc lập: <code>sigmoid(x) ∈ [0, 1]</code></p>
+<p>Ví dụ: Một object có thể vừa là "person" (0.9) vừa là "tennis racket" (0.8)</p>
+<h4 id="step-2-extract-class-id--max-confidence"><strong>Step 2: Extract Class ID &amp; Max Confidence</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Trước Step 2</span>
+<span class="n">detection</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.91</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">]</span>
+
+<span class="c1"># Sau Step 2</span>
+<span class="n">class_id</span> <span class="o">=</span> <span class="n">argmax</span><span class="p">([</span><span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.91</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">])</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># class &quot;person&quot;</span>
+<span class="n">max_conf</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.91</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">])</span> <span class="o">=</span> <span class="mf">0.91</span>
+
+<span class="c1"># Output format mới</span>
+<span class="n">processed_detection</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.91</span><span class="p">]</span>
+<span class="c1">#                      ↑___bbox coords___↑  ↑cls↑conf</span>
+</code></pre></div>
+
+<p><strong>Note</strong>: Trong thực tế, Step 1 và Step 2 được thực hiện cùng lúc để tối ưu performance.</p>
+<h4 id="step-3-group-detections-by-class"><strong>Step 3: Group Detections By Class</strong></h4>
+<p>Mục đích: Tách các detections theo từng class để xử lý riêng biệt.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Input: Tất cả detections sau Step 2</span>
+<span class="n">all_detections</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">],</span>   <span class="c1"># person</span>
+    <span class="p">[</span><span class="mi">150</span><span class="p">,</span> <span class="mi">220</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">],</span>  <span class="c1"># person (trùng với detection trên)</span>
+    <span class="p">[</span><span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">],</span>  <span class="c1"># bicycle</span>
+    <span class="p">[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">210</span><span class="p">,</span> <span class="mi">52</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">],</span>  <span class="c1"># person (cũng trùng)</span>
+    <span class="p">[</span><span class="mi">510</span><span class="p">,</span> <span class="mi">305</span><span class="p">,</span> <span class="mi">58</span><span class="p">,</span> <span class="mi">88</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.87</span><span class="p">],</span>  <span class="c1"># bicycle (trùng với bicycle trên)</span>
+<span class="p">]</span>
+
+<span class="c1"># Output: Grouped by class</span>
+<span class="n">class_0_detections</span> <span class="o">=</span> <span class="p">[</span>  <span class="c1"># person</span>
+    <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">150</span><span class="p">,</span> <span class="mi">220</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">210</span><span class="p">,</span> <span class="mi">52</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">],</span>
+<span class="p">]</span>
+
+<span class="n">class_1_detections</span> <span class="o">=</span> <span class="p">[</span>  <span class="c1"># bicycle</span>
+    <span class="p">[</span><span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">510</span><span class="p">,</span> <span class="mi">305</span><span class="p">,</span> <span class="mi">58</span><span class="p">,</span> <span class="mi">88</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.87</span><span class="p">],</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Tại sao phải group by class?</strong>
+- Tránh loại bỏ nhầm detections của các objects khác nhau
+- Ví dụ: Person box và Car box có thể overlap nhưng là 2 objects khác nhau</p>
+<h4 id="step-4-apply-nms-per-class-bước-quan-trọng-nhất"><strong>Step 4: Apply NMS Per Class</strong> (Bước quan trọng nhất!)</h4>
+<p><strong>Thuật toán NMS cho 1 class:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nms_single_class</span><span class="p">(</span><span class="n">detections</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Input: </span>
+<span class="sd">      detections = [[x1,y1,x2,y2,class,conf], ...]  # N detections</span>
+<span class="sd">      iou_threshold = 0.5</span>
+
+<span class="sd">    Output:</span>
+<span class="sd">      kept_detections = [[x1,y1,x2,y2,class,conf], ...]  # M detections (M &lt; N)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Bước 1: Sắp xếp theo confidence score giảm dần</span>
+    <span class="n">sorted_detections</span> <span class="o">=</span> <span class="n">sort_by_confidence_desc</span><span class="p">(</span><span class="n">detections</span><span class="p">)</span>
+
+    <span class="n">kept_boxes</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Bước 2: Loop qua từng detection</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">sorted_detections</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Lấy box có confidence cao nhất</span>
+        <span class="n">best_box</span> <span class="o">=</span> <span class="n">sorted_detections</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">kept_boxes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">best_box</span><span class="p">)</span>
+
+        <span class="c1"># Bước 3: Tính IoU của best_box với tất cả boxes còn lại</span>
+        <span class="n">remaining_boxes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">box</span> <span class="ow">in</span> <span class="n">sorted_detections</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">iou</span> <span class="o">=</span> <span class="n">calculate_iou</span><span class="p">(</span><span class="n">best_box</span><span class="p">,</span> <span class="n">box</span><span class="p">)</span>
+
+            <span class="c1"># Nếu IoU &lt; threshold → giữ lại (không trùng)</span>
+            <span class="k">if</span> <span class="n">iou</span> <span class="o">&lt;</span> <span class="n">iou_threshold</span><span class="p">:</span>
+                <span class="n">remaining_boxes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">box</span><span class="p">)</span>
+            <span class="c1"># Nếu IoU &gt;= threshold → loại bỏ (trùng lặp)</span>
+
+        <span class="n">sorted_detections</span> <span class="o">=</span> <span class="n">remaining_boxes</span>
+
+    <span class="k">return</span> <span class="n">kept_boxes</span>
+</code></pre></div>
+
+<p><strong>Minh họa bằng ví dụ cụ thể:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Giả sử có 4 person detections (đã sort theo conf)</span>
+<span class="n">person_detections</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">],</span>  <span class="c1"># Box A - BEST</span>
+    <span class="p">[</span><span class="mi">105</span><span class="p">,</span> <span class="mi">205</span><span class="p">,</span> <span class="mi">155</span><span class="p">,</span> <span class="mi">285</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">],</span>  <span class="c1"># Box B - overlap với A</span>
+    <span class="p">[</span><span class="mi">110</span><span class="p">,</span> <span class="mi">202</span><span class="p">,</span> <span class="mi">152</span><span class="p">,</span> <span class="mi">282</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">],</span>  <span class="c1"># Box C - overlap với A</span>
+    <span class="p">[</span><span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">450</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.80</span><span class="p">],</span>  <span class="c1"># Box D - person khác</span>
+<span class="p">]</span>
+
+<span class="c1"># Iteration 1:</span>
+<span class="c1"># - Chọn Box A (conf=0.92) → KEEP</span>
+<span class="c1"># - Tính IoU(A, B) = 0.85 &gt; 0.5 → REMOVE B</span>
+<span class="c1"># - Tính IoU(A, C) = 0.78 &gt; 0.5 → REMOVE C</span>
+<span class="c1"># - Tính IoU(A, D) = 0.02 &lt; 0.5 → KEEP D</span>
+<span class="c1"># Remaining: [Box D]</span>
+
+<span class="c1"># Iteration 2:</span>
+<span class="c1"># - Chọn Box D (conf=0.80) → KEEP</span>
+<span class="c1"># Remaining: []</span>
+
+<span class="c1"># Final result:</span>
+<span class="n">kept_boxes</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">],</span>  <span class="c1"># Box A</span>
+    <span class="p">[</span><span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">450</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.80</span><span class="p">],</span>  <span class="c1"># Box D</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Flowchart của NMS:</strong></p>
+<div class="codehilite"><pre><span></span><code>START
+  ↓
+Sort boxes by confidence (desc)
+  ↓
+Pick highest confidence box → ADD to output
+  ↓
+Calculate IoU with all remaining boxes
+  ↓
+Remove boxes with IoU &gt; threshold
+  ↓
+Any boxes left? 
+  ├─ YES → Go back to &quot;Pick highest&quot;
+  └─ NO → END
+</code></pre></div>
+
+<h4 id="step-5-combine-all-classes"><strong>Step 5: Combine All Classes</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Kết hợp kết quả từ tất cả các classes</span>
+<span class="n">final_detections</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">class_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_classes</span><span class="p">):</span>
+    <span class="n">class_detections</span> <span class="o">=</span> <span class="n">group_by_class</span><span class="p">[</span><span class="n">class_id</span><span class="p">]</span>
+    <span class="n">kept_detections</span> <span class="o">=</span> <span class="n">nms_single_class</span><span class="p">(</span><span class="n">class_detections</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">final_detections</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">kept_detections</span><span class="p">)</span>
+
+<span class="c1"># final_detections chính là output cuối cùng!</span>
+</code></pre></div>
+
+<h3 id="33-class-aware-vs-class-agnostic-nms">3.3. Class-Aware vs Class-Agnostic NMS</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Class-Aware NMS</th>
+<th>Class-Agnostic NMS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cách hoạt động</strong></td>
+<td>Chạy NMS riêng cho từng class</td>
+<td>Chạy NMS trên TẤT CẢ boxes cùng lúc</td>
+</tr>
+<tr>
+<td><strong>Ưu điểm</strong></td>
+<td>Không loại nhầm objects khác class</td>
+<td>Nhanh hơn, đơn giản hơn</td>
+</tr>
+<tr>
+<td><strong>Nhược điểm</strong></td>
+<td>Chậm hơn khi có nhiều classes</td>
+<td>Có thể loại nhầm overlapping objects</td>
+</tr>
+<tr>
+<td><strong>Use case</strong></td>
+<td>YOLO standard, crowded scenes</td>
+<td>Real-time apps, single/few classes</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Ví dụ so sánh:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Scenario: Person đứng cạnh bicycle, 2 boxes overlap 60%</span>
+<span class="n">person_box</span> <span class="o">=</span> <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">]</span>   <span class="c1"># class 0: person</span>
+<span class="n">bicycle_box</span> <span class="o">=</span> <span class="p">[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">210</span><span class="p">,</span> <span class="mi">180</span><span class="p">,</span> <span class="mi">310</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">]</span> <span class="c1"># class 1: bicycle</span>
+
+<span class="c1"># Class-Aware NMS:</span>
+<span class="c1"># → Xử lý riêng person và bicycle</span>
+<span class="c1"># → GIỮ CẢ 2 BOXES ✅</span>
+
+<span class="c1"># Class-Agnostic NMS:</span>
+<span class="c1"># → Xử lý chung tất cả</span>
+<span class="c1"># → IoU = 0.6 &gt; threshold</span>
+<span class="c1"># → Chỉ giữ person_box (conf cao hơn) ❌ SAI!</span>
+</code></pre></div>
+
+<p><strong>Kết luận</strong>: Class-Aware NMS tốt hơn cho general object detection.</p>
+<hr />
+<h2 id="4-implement-nms-từ-đầu">4. Implement NMS Từ Đầu</h2>
+<h3 id="41-setup-environment">4.1. Setup Environment</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Import thư viện cần thiết</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ultralytics</span><span class="w"> </span><span class="kn">import</span> <span class="n">YOLO</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">onnxruntime</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ort</span>
+
+<span class="c1"># Load ONNX model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">ort</span><span class="o">.</span><span class="n">InferenceSession</span><span class="p">(</span>
+    <span class="s2">&quot;./yolov8n.onnx&quot;</span><span class="p">,</span> 
+    <span class="n">providers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;CPUExecutionProvider&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+
+<span class="c1"># Kiểm tra input/output shape</span>
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_inputs</span><span class="p">()</span>
+<span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_outputs</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;MODEL INFORMATION&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input Name:  </span><span class="si">{</span><span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input Type:  </span><span class="si">{</span><span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input Shape: </span><span class="si">{</span><span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output Name:  </span><span class="si">{</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output Type:  </span><span class="si">{</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output Shape: </span><span class="si">{</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Expected Output:</strong></p>
+<div class="codehilite"><pre><span></span><code>==================================================
+MODEL INFORMATION
+==================================================
+Input Name:  images
+Input Type:  tensor(float)
+Input Shape: [1, 3, 640, 640]
+--------------------------------------------------
+Output Name:  output0
+Output Type:  tensor(float)
+Output Shape: [1, 84, 8400]
+==================================================
+</code></pre></div>
+
+<h3 id="42-image-preprocessing">4.2. Image Preprocessing</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">preprocess_image</span><span class="p">(</span><span class="n">image_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="mi">640</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Tiền xử lý ảnh cho YOLO model</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        image_path: Đường dẫn đến ảnh</span>
+<span class="sd">        target_size: Kích thước input của model (mặc định 640)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        original_image: Ảnh gốc (BGR format)</span>
+<span class="sd">        preprocessed_image: Ảnh đã xử lý (shape: 1, 3, 640, 640)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Đọc ảnh</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="n">image_path</span><span class="p">)</span>
+    <span class="n">original_image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;📷 Original image shape: </span><span class="si">{</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Convert BGR → RGB</span>
+    <span class="n">rgb_image</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_BGR2RGB</span><span class="p">)</span>
+
+    <span class="c1"># Resize về 640x640</span>
+    <span class="n">resized_image</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">rgb_image</span><span class="p">,</span> <span class="p">(</span><span class="n">target_size</span><span class="p">,</span> <span class="n">target_size</span><span class="p">))</span>
+
+    <span class="c1"># Normalize [0, 255] → [0, 1]</span>
+    <span class="n">normalized_image</span> <span class="o">=</span> <span class="n">resized_image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;float32&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mf">255.0</span>
+
+    <span class="c1"># Transpose (H, W, C) → (C, H, W)</span>
+    <span class="n">transposed_image</span> <span class="o">=</span> <span class="n">normalized_image</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Add batch dimension (C, H, W) → (1, C, H, W)</span>
+    <span class="n">preprocessed_image</span> <span class="o">=</span> <span class="n">transposed_image</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;🔧 Preprocessed shape: </span><span class="si">{</span><span class="n">preprocessed_image</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">original_image</span><span class="p">,</span> <span class="n">preprocessed_image</span>
+
+<span class="c1"># Test preprocessing</span>
+<span class="n">original_img</span><span class="p">,</span> <span class="n">preprocessed_img</span> <span class="o">=</span> <span class="n">preprocess_image</span><span class="p">(</span><span class="s2">&quot;./demo.jpg&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="43-run-inference">4.3. Run Inference</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Chạy model inference</span>
+<span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;output0&quot;</span><span class="p">],</span>  <span class="c1"># output names</span>
+    <span class="p">{</span><span class="s2">&quot;images&quot;</span><span class="p">:</span> <span class="n">preprocessed_img</span><span class="p">}</span>  <span class="c1"># input dict</span>
+<span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;🎯 Raw prediction shape: </span><span class="si">{</span><span class="n">predictions</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># Output: (1, 84, 8400)</span>
+
+<span class="c1"># Transpose để dễ xử lý</span>
+<span class="n">predictions</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;🔄 Transposed shape: </span><span class="si">{</span><span class="n">predictions</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># Output: (8400, 84)</span>
+</code></pre></div>
+
+<h3 id="44-implement-nms---complete-code">4.4. Implement NMS - Complete Code</h3>
+<h4 id="function-1-parse--filter-predictions-step-1--2"><strong>Function 1: Parse &amp; Filter Predictions (Step 1 &amp; 2)</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">parse_predictions</span><span class="p">(</span>
+    <span class="n">predictions</span><span class="p">,</span> 
+    <span class="n">img_width</span><span class="p">,</span> 
+    <span class="n">img_height</span><span class="p">,</span> 
+    <span class="n">conf_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">model_input_size</span><span class="o">=</span><span class="mi">640</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parse YOLO predictions và filter theo confidence threshold</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        predictions: Array shape (8400, 84) từ YOLO model</span>
+<span class="sd">        img_width: Chiều rộng ảnh gốc</span>
+<span class="sd">        img_height: Chiều cao ảnh gốc</span>
+<span class="sd">        conf_threshold: Ngưỡng confidence tối thiểu (default: 0.5)</span>
+<span class="sd">        model_input_size: Kích thước input model (default: 640)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        filtered_boxes: Array shape (N, 6) với format:</span>
+<span class="sd">                       [x1, y1, x2, y2, class_id, confidence]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Step 1: Tính max confidence score cho mỗi detection</span>
+    <span class="c1"># predictions[:, 4:] lấy 80 class scores</span>
+    <span class="n">max_conf_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">predictions</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Step 2: Lọc detections có conf &gt; threshold</span>
+    <span class="n">valid_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">max_conf_scores</span> <span class="o">&gt;</span> <span class="n">conf_threshold</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_indices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️  No detections above confidence threshold!&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+
+    <span class="c1"># Lấy các detections hợp lệ</span>
+    <span class="n">valid_detections</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">valid_indices</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✅ Filtered: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">valid_detections</span><span class="p">)</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span><span class="si">}</span><span class="s2"> detections&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 3: Extract class_id và confidence</span>
+    <span class="n">class_ids</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">:]</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">confidences</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">:]</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Step 4: Convert từ center format → corner format</span>
+    <span class="c1"># YOLO output: [x_center, y_center, width, height] (normalized 0-1)</span>
+    <span class="c1"># Cần convert sang: [x1, y1, x2, y2] (pixel coordinates)</span>
+
+    <span class="n">x_centers</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">y_centers</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">widths</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
+    <span class="n">heights</span> <span class="o">=</span> <span class="n">valid_detections</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span>
+
+    <span class="c1"># Rescale về tọa độ ảnh gốc</span>
+    <span class="n">scale_x</span> <span class="o">=</span> <span class="n">img_width</span> <span class="o">/</span> <span class="n">model_input_size</span>
+    <span class="n">scale_y</span> <span class="o">=</span> <span class="n">img_height</span> <span class="o">/</span> <span class="n">model_input_size</span>
+
+    <span class="n">x1</span> <span class="o">=</span> <span class="p">((</span><span class="n">x_centers</span> <span class="o">-</span> <span class="n">widths</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">model_input_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">img_width</span>
+    <span class="n">y1</span> <span class="o">=</span> <span class="p">((</span><span class="n">y_centers</span> <span class="o">-</span> <span class="n">heights</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">model_input_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">img_height</span>
+    <span class="n">x2</span> <span class="o">=</span> <span class="p">((</span><span class="n">x_centers</span> <span class="o">+</span> <span class="n">widths</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">model_input_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">img_width</span>
+    <span class="n">y2</span> <span class="o">=</span> <span class="p">((</span><span class="n">y_centers</span> <span class="o">+</span> <span class="n">heights</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">model_input_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">img_height</span>
+
+    <span class="c1"># Clip coordinates về giới hạn ảnh</span>
+    <span class="n">x1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_width</span><span class="p">)</span>
+    <span class="n">y1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_height</span><span class="p">)</span>
+    <span class="n">x2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_width</span><span class="p">)</span>
+    <span class="n">y2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">y2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_height</span><span class="p">)</span>
+
+    <span class="c1"># Combine tất cả thông tin</span>
+    <span class="n">filtered_boxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">([</span>
+        <span class="n">x1</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span>
+        <span class="n">y1</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span>
+        <span class="n">x2</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span>
+        <span class="n">y2</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span>
+        <span class="n">class_ids</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span>
+        <span class="n">confidences</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+    <span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">filtered_boxes</span>
+</code></pre></div>
+
+<h4 id="function-2-nms-for-single-class-step-4"><strong>Function 2: NMS for Single Class (Step 4)</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nms_single_class</span><span class="p">(</span><span class="n">boxes</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply Non-Maximum Suppression cho 1 class</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        boxes: Array shape (N, 4) với format [x1, y1, x2, y2]</span>
+<span class="sd">        scores: Array shape (N,) - confidence scores</span>
+<span class="sd">        iou_threshold: Ngưỡng IoU để loại bỏ boxes trùng lặp</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        keep_indices: Array indices của các boxes được giữ lại</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">boxes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+    <span class="c1"># Extract coordinates</span>
+    <span class="n">x1</span> <span class="o">=</span> <span class="n">boxes</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">y1</span> <span class="o">=</span> <span class="n">boxes</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">x2</span> <span class="o">=</span> <span class="n">boxes</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
+    <span class="n">y2</span> <span class="o">=</span> <span class="n">boxes</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span>
+
+    <span class="c1"># Tính diện tích mỗi box</span>
+    <span class="n">areas</span> <span class="o">=</span> <span class="p">(</span><span class="n">x2</span> <span class="o">-</span> <span class="n">x1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">y2</span> <span class="o">-</span> <span class="n">y1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Sort indices theo confidence score giảm dần</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">keep</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">while</span> <span class="n">order</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Lấy index của box có confidence cao nhất</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="n">order</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">keep</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="c1"># Nếu chỉ còn 1 box → kết thúc</span>
+        <span class="k">if</span> <span class="n">order</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">break</span>
+
+        <span class="c1"># Tính IoU của box hiện tại với tất cả boxes còn lại</span>
+        <span class="c1"># Tìm tọa độ vùng giao</span>
+        <span class="n">xx1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x1</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">x1</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">1</span><span class="p">:]])</span>
+        <span class="n">yy1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">y1</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">y1</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">1</span><span class="p">:]])</span>
+        <span class="n">xx2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">x2</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">x2</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">1</span><span class="p">:]])</span>
+        <span class="n">yy2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">y2</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">y2</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">1</span><span class="p">:]])</span>
+
+        <span class="c1"># Tính width và height của vùng giao</span>
+        <span class="n">w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">xx2</span> <span class="o">-</span> <span class="n">xx1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">yy2</span> <span class="o">-</span> <span class="n">yy1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Tính diện tích giao</span>
+        <span class="n">intersection</span> <span class="o">=</span> <span class="n">w</span> <span class="o">*</span> <span class="n">h</span>
+
+        <span class="c1"># Tính IoU</span>
+        <span class="n">iou</span> <span class="o">=</span> <span class="n">intersection</span> <span class="o">/</span> <span class="p">(</span><span class="n">areas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">areas</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="mi">1</span><span class="p">:]]</span> <span class="o">-</span> <span class="n">intersection</span><span class="p">)</span>
+
+        <span class="c1"># Giữ lại các boxes có IoU &lt;= threshold (không trùng)</span>
+        <span class="n">inds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">iou</span> <span class="o">&lt;=</span> <span class="n">iou_threshold</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># Update order (cộng 1 vì đã bỏ qua phần tử đầu)</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="n">order</span><span class="p">[</span><span class="n">inds</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">keep</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+</code></pre></div>
+
+<h4 id="function-3-apply-nms-all-classes-step-3-4-5"><strong>Function 3: Apply NMS All Classes (Step 3, 4, 5)</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_nms</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply Class-Aware NMS trên tất cả detections</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        filtered_boxes: Array shape (N, 6) </span>
+<span class="sd">                       [x1, y1, x2, y2, class_id, confidence]</span>
+<span class="sd">        iou_threshold: Ngưỡng IoU (default: 0.5)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        final_boxes: Array các boxes sau NMS</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+
+    <span class="c1"># Step 3: Lấy danh sách unique classes</span>
+    <span class="n">unique_classes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">])</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🎨 Detected classes: </span><span class="si">{</span><span class="n">unique_classes</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">final_indices</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Step 4: Loop qua từng class và apply NMS</span>
+    <span class="k">for</span> <span class="n">class_id</span> <span class="ow">in</span> <span class="n">unique_classes</span><span class="p">:</span>
+        <span class="c1"># Lấy indices của class này</span>
+        <span class="n">class_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">]</span> <span class="o">==</span> <span class="n">class_id</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">class_boxes</span> <span class="o">=</span> <span class="n">filtered_boxes</span><span class="p">[</span><span class="n">class_indices</span><span class="p">,</span> <span class="p">:</span><span class="mi">4</span><span class="p">]</span>  <span class="c1"># x1,y1,x2,y2</span>
+        <span class="n">class_scores</span> <span class="o">=</span> <span class="n">filtered_boxes</span><span class="p">[</span><span class="n">class_indices</span><span class="p">,</span> <span class="mi">5</span><span class="p">]</span>  <span class="c1"># confidence</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Class </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">class_id</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">class_boxes</span><span class="p">)</span><span class="si">}</span><span class="s2"> boxes before NMS&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Apply NMS cho class này</span>
+        <span class="n">keep_indices</span> <span class="o">=</span> <span class="n">nms_single_class</span><span class="p">(</span>
+            <span class="n">class_boxes</span><span class="p">,</span> 
+            <span class="n">class_scores</span><span class="p">,</span> 
+            <span class="n">iou_threshold</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Chuyển về indices global</span>
+        <span class="n">global_keep_indices</span> <span class="o">=</span> <span class="n">class_indices</span><span class="p">[</span><span class="n">keep_indices</span><span class="p">]</span>
+        <span class="n">final_indices</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">global_keep_indices</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Class </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">class_id</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">keep_indices</span><span class="p">)</span><span class="si">}</span><span class="s2"> boxes after NMS ✓&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 5: Combine results</span>
+    <span class="n">final_boxes</span> <span class="o">=</span> <span class="n">filtered_boxes</span><span class="p">[</span><span class="n">final_indices</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">📦 Final detections: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">final_boxes</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">final_boxes</span>
+</code></pre></div>
+
+<h3 id="45-complete-pipeline">4.5. Complete Pipeline</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># COCO class names (80 classes)</span>
+<span class="n">COCO_CLASSES</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;person&quot;</span><span class="p">,</span> <span class="s2">&quot;bicycle&quot;</span><span class="p">,</span> <span class="s2">&quot;car&quot;</span><span class="p">,</span> <span class="s2">&quot;motorcycle&quot;</span><span class="p">,</span> <span class="s2">&quot;airplane&quot;</span><span class="p">,</span> <span class="s2">&quot;bus&quot;</span><span class="p">,</span> <span class="s2">&quot;train&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;truck&quot;</span><span class="p">,</span> <span class="s2">&quot;boat&quot;</span><span class="p">,</span> <span class="s2">&quot;traffic light&quot;</span><span class="p">,</span> <span class="s2">&quot;fire hydrant&quot;</span><span class="p">,</span> <span class="s2">&quot;stop sign&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;parking meter&quot;</span><span class="p">,</span> <span class="s2">&quot;bench&quot;</span><span class="p">,</span> <span class="s2">&quot;bird&quot;</span><span class="p">,</span> <span class="s2">&quot;cat&quot;</span><span class="p">,</span> <span class="s2">&quot;dog&quot;</span><span class="p">,</span> <span class="s2">&quot;horse&quot;</span><span class="p">,</span> <span class="s2">&quot;sheep&quot;</span><span class="p">,</span> <span class="s2">&quot;cow&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;elephant&quot;</span><span class="p">,</span> <span class="s2">&quot;bear&quot;</span><span class="p">,</span> <span class="s2">&quot;zebra&quot;</span><span class="p">,</span> <span class="s2">&quot;giraffe&quot;</span><span class="p">,</span> <span class="s2">&quot;backpack&quot;</span><span class="p">,</span> <span class="s2">&quot;umbrella&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;handbag&quot;</span><span class="p">,</span> <span class="s2">&quot;tie&quot;</span><span class="p">,</span> <span class="s2">&quot;suitcase&quot;</span><span class="p">,</span> <span class="s2">&quot;frisbee&quot;</span><span class="p">,</span> <span class="s2">&quot;skis&quot;</span><span class="p">,</span> <span class="s2">&quot;snowboard&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;sports ball&quot;</span><span class="p">,</span> <span class="s2">&quot;kite&quot;</span><span class="p">,</span> <span class="s2">&quot;baseball bat&quot;</span><span class="p">,</span> <span class="s2">&quot;baseball glove&quot;</span><span class="p">,</span> <span class="s2">&quot;skateboard&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;surfboard&quot;</span><span class="p">,</span> <span class="s2">&quot;tennis racket&quot;</span><span class="p">,</span> <span class="s2">&quot;bottle&quot;</span><span class="p">,</span> <span class="s2">&quot;wine glass&quot;</span><span class="p">,</span> <span class="s2">&quot;cup&quot;</span><span class="p">,</span> <span class="s2">&quot;fork&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;knife&quot;</span><span class="p">,</span> <span class="s2">&quot;spoon&quot;</span><span class="p">,</span> <span class="s2">&quot;bowl&quot;</span><span class="p">,</span> <span class="s2">&quot;banana&quot;</span><span class="p">,</span> <span class="s2">&quot;apple&quot;</span><span class="p">,</span> <span class="s2">&quot;sandwich&quot;</span><span class="p">,</span> <span class="s2">&quot;orange&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;broccoli&quot;</span><span class="p">,</span> <span class="s2">&quot;carrot&quot;</span><span class="p">,</span> <span class="s2">&quot;hot dog&quot;</span><span class="p">,</span> <span class="s2">&quot;pizza&quot;</span><span class="p">,</span> <span class="s2">&quot;donut&quot;</span><span class="p">,</span> <span class="s2">&quot;cake&quot;</span><span class="p">,</span> <span class="s2">&quot;chair&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;couch&quot;</span><span class="p">,</span> <span class="s2">&quot;potted plant&quot;</span><span class="p">,</span> <span class="s2">&quot;bed&quot;</span><span class="p">,</span> <span class="s2">&quot;dining table&quot;</span><span class="p">,</span> <span class="s2">&quot;toilet&quot;</span><span class="p">,</span> <span class="s2">&quot;tv&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;laptop&quot;</span><span class="p">,</span> <span class="s2">&quot;mouse&quot;</span><span class="p">,</span> <span class="s2">&quot;remote&quot;</span><span class="p">,</span> <span class="s2">&quot;keyboard&quot;</span><span class="p">,</span> <span class="s2">&quot;cell phone&quot;</span><span class="p">,</span> <span class="s2">&quot;microwave&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;oven&quot;</span><span class="p">,</span> <span class="s2">&quot;toaster&quot;</span><span class="p">,</span> <span class="s2">&quot;sink&quot;</span><span class="p">,</span> <span class="s2">&quot;refrigerator&quot;</span><span class="p">,</span> <span class="s2">&quot;book&quot;</span><span class="p">,</span> <span class="s2">&quot;clock&quot;</span><span class="p">,</span> <span class="s2">&quot;vase&quot;</span><span class="p">,</span> 
+    <span class="s2">&quot;scissors&quot;</span><span class="p">,</span> <span class="s2">&quot;teddy bear&quot;</span><span class="p">,</span> <span class="s2">&quot;hair drier&quot;</span><span class="p">,</span> <span class="s2">&quot;toothbrush&quot;</span>
+<span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">yolo_postprocess_complete</span><span class="p">(</span>
+    <span class="n">image_path</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">conf_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Complete YOLO post-processing pipeline</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        image_path: Đường dẫn ảnh</span>
+<span class="sd">        model: ONNX model session</span>
+<span class="sd">        conf_threshold: Confidence threshold</span>
+<span class="sd">        iou_threshold: IoU threshold for NMS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        final_detections: Array các detections cuối cùng</span>
+<span class="sd">        original_image: Ảnh gốc để visualize</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;YOLO POST-PROCESSING PIPELINE&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+
+    <span class="c1"># 1. Preprocess</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[1/5] Preprocessing image...&quot;</span><span class="p">)</span>
+    <span class="n">original_image</span><span class="p">,</span> <span class="n">preprocessed_image</span> <span class="o">=</span> <span class="n">preprocess_image</span><span class="p">(</span><span class="n">image_path</span><span class="p">)</span>
+    <span class="n">img_height</span><span class="p">,</span> <span class="n">img_width</span> <span class="o">=</span> <span class="n">original_image</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="c1"># 2. Inference</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[2/5] Running model inference...&quot;</span><span class="p">)</span>
+    <span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+        <span class="p">[</span><span class="s2">&quot;output0&quot;</span><span class="p">],</span> 
+        <span class="p">{</span><span class="s2">&quot;images&quot;</span><span class="p">:</span> <span class="n">preprocessed_image</span><span class="p">}</span>
+    <span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">predictions</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># (8400, 84)</span>
+
+    <span class="c1"># 3. Parse &amp; Filter</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[3/5] Parsing predictions (conf &gt; </span><span class="si">{</span><span class="n">conf_threshold</span><span class="si">}</span><span class="s2">)...&quot;</span><span class="p">)</span>
+    <span class="n">filtered_boxes</span> <span class="o">=</span> <span class="n">parse_predictions</span><span class="p">(</span>
+        <span class="n">predictions</span><span class="p">,</span>
+        <span class="n">img_width</span><span class="p">,</span>
+        <span class="n">img_height</span><span class="p">,</span>
+        <span class="n">conf_threshold</span><span class="o">=</span><span class="n">conf_threshold</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">❌ No detections found!&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span> <span class="n">original_image</span>
+
+    <span class="c1"># 4. Apply NMS</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[4/5] Applying NMS (IoU threshold: </span><span class="si">{</span><span class="n">iou_threshold</span><span class="si">}</span><span class="s2">)...&quot;</span><span class="p">)</span>
+    <span class="n">final_detections</span> <span class="o">=</span> <span class="n">apply_nms</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">,</span> <span class="n">iou_threshold</span><span class="o">=</span><span class="n">iou_threshold</span><span class="p">)</span>
+
+    <span class="c1"># 5. Print results</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[5/5] Final Results:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">det</span> <span class="ow">in</span> <span class="n">final_detections</span><span class="p">:</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="n">class_id</span><span class="p">,</span> <span class="n">conf</span> <span class="o">=</span> <span class="n">det</span>
+        <span class="n">class_name</span> <span class="o">=</span> <span class="n">COCO_CLASSES</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">class_id</span><span class="p">)]</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  📍 </span><span class="si">{</span><span class="n">class_name</span><span class="si">:</span><span class="s2">15s</span><span class="si">}</span><span class="s2"> | Conf: </span><span class="si">{</span><span class="n">conf</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> | &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;Box: [</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">x1</span><span class="p">)</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">y1</span><span class="p">)</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">y2</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">final_detections</span><span class="p">,</span> <span class="n">original_image</span>
+
+<span class="c1"># Run complete pipeline</span>
+<span class="n">final_dets</span><span class="p">,</span> <span class="n">orig_img</span> <span class="o">=</span> <span class="n">yolo_postprocess_complete</span><span class="p">(</span>
+    <span class="n">image_path</span><span class="o">=</span><span class="s2">&quot;./demo.jpg&quot;</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">conf_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.5</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="46-visualization">4.6. Visualization</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">visualize_detections</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">class_names</span><span class="o">=</span><span class="n">COCO_CLASSES</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Vẽ bounding boxes và labels lên ảnh</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        image: Ảnh gốc (BGR format)</span>
+<span class="sd">        detections: Array shape (N, 6)</span>
+<span class="sd">        class_names: List tên các classes</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Copy ảnh để không modify original</span>
+    <span class="n">vis_image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="c1"># Generate colors cho mỗi class</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+    <span class="n">colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">class_names</span><span class="p">),</span> <span class="mi">3</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">det</span> <span class="ow">in</span> <span class="n">detections</span><span class="p">:</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="n">class_id</span><span class="p">,</span> <span class="n">conf</span> <span class="o">=</span> <span class="n">det</span>
+        <span class="n">class_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">class_id</span><span class="p">)</span>
+
+        <span class="c1"># Get color và class name</span>
+        <span class="n">color</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[</span><span class="n">class_id</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="n">class_name</span> <span class="o">=</span> <span class="n">class_names</span><span class="p">[</span><span class="n">class_id</span><span class="p">]</span>
+
+        <span class="c1"># Vẽ bounding box</span>
+        <span class="n">cv2</span><span class="o">.</span><span class="n">rectangle</span><span class="p">(</span>
+            <span class="n">vis_image</span><span class="p">,</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">y1</span><span class="p">)),</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x2</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">y2</span><span class="p">)),</span>
+            <span class="n">color</span><span class="p">,</span>
+            <span class="n">thickness</span><span class="o">=</span><span class="mi">2</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Tạo label text</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">class_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">conf</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Tính kích thước text</span>
+        <span class="p">(</span><span class="n">text_width</span><span class="p">,</span> <span class="n">text_height</span><span class="p">),</span> <span class="n">_</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">getTextSize</span><span class="p">(</span>
+            <span class="n">label</span><span class="p">,</span>
+            <span class="n">cv2</span><span class="o">.</span><span class="n">FONT_HERSHEY_SIMPLEX</span><span class="p">,</span>
+            <span class="mf">0.6</span><span class="p">,</span>
+            <span class="mi">1</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Vẽ background cho text</span>
+        <span class="n">cv2</span><span class="o">.</span><span class="n">rectangle</span><span class="p">(</span>
+            <span class="n">vis_image</span><span class="p">,</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">y1</span><span class="p">)</span> <span class="o">-</span> <span class="n">text_height</span> <span class="o">-</span> <span class="mi">10</span><span class="p">),</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x1</span><span class="p">)</span> <span class="o">+</span> <span class="n">text_width</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">y1</span><span class="p">)),</span>
+            <span class="n">color</span><span class="p">,</span>
+            <span class="o">-</span><span class="mi">1</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Vẽ text</span>
+        <span class="n">cv2</span><span class="o">.</span><span class="n">putText</span><span class="p">(</span>
+            <span class="n">vis_image</span><span class="p">,</span>
+            <span class="n">label</span><span class="p">,</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">y1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">5</span><span class="p">),</span>
+            <span class="n">cv2</span><span class="o">.</span><span class="n">FONT_HERSHEY_SIMPLEX</span><span class="p">,</span>
+            <span class="mf">0.6</span><span class="p">,</span>
+            <span class="p">(</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">),</span>
+            <span class="n">thickness</span><span class="o">=</span><span class="mi">2</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">vis_image</span>
+
+<span class="c1"># Visualize kết quả</span>
+<span class="n">result_image</span> <span class="o">=</span> <span class="n">visualize_detections</span><span class="p">(</span><span class="n">orig_img</span><span class="p">,</span> <span class="n">final_dets</span><span class="p">)</span>
+
+<span class="c1"># Display</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">result_image</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_BGR2RGB</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;YOLO Detection Results After NMS&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;detection_result.png&#39;</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s1">&#39;tight&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✅ Saved result to &#39;detection_result.png&#39;&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="47-performance-benchmarking">4.7. Performance Benchmarking</h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">benchmark_nms</span><span class="p">(</span><span class="n">image_path</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">num_runs</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Đo performance của NMS pipeline</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">⏱️  Running benchmark (</span><span class="si">{</span><span class="n">num_runs</span><span class="si">}</span><span class="s2"> iterations)...&quot;</span><span class="p">)</span>
+
+    <span class="n">times</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;preprocess&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s1">&#39;inference&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s1">&#39;postprocess&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s1">&#39;total&#39;</span><span class="p">:</span> <span class="p">[]</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_runs</span><span class="p">):</span>
+        <span class="n">t_total_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="c1"># Preprocess</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">orig_img</span><span class="p">,</span> <span class="n">prep_img</span> <span class="o">=</span> <span class="n">preprocess_image</span><span class="p">(</span><span class="n">image_path</span><span class="p">)</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">times</span><span class="p">[</span><span class="s1">&#39;preprocess&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span>
+
+        <span class="c1"># Inference</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">pred</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">&quot;output0&quot;</span><span class="p">],</span> <span class="p">{</span><span class="s2">&quot;images&quot;</span><span class="p">:</span> <span class="n">prep_img</span><span class="p">})[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">times</span><span class="p">[</span><span class="s1">&#39;inference&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span>
+
+        <span class="c1"># Postprocess</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">filtered</span> <span class="o">=</span> <span class="n">parse_predictions</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">orig_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">orig_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">final</span> <span class="o">=</span> <span class="n">apply_nms</span><span class="p">(</span><span class="n">filtered</span><span class="p">)</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">times</span><span class="p">[</span><span class="s1">&#39;postprocess&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span>
+
+        <span class="n">times</span><span class="p">[</span><span class="s1">&#39;total&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t_total_start</span><span class="p">)</span>
+
+    <span class="c1"># Print results</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PERFORMANCE BENCHMARK RESULTS&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">stage</span><span class="p">,</span> <span class="n">stage_times</span> <span class="ow">in</span> <span class="n">times</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">avg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">stage_times</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">stage_times</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">stage</span><span class="si">:</span><span class="s2">15s</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">avg</span><span class="si">:</span><span class="s2">6.2f</span><span class="si">}</span><span class="s2"> ± </span><span class="si">{</span><span class="n">std</span><span class="si">:</span><span class="s2">5.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+
+    <span class="n">total_avg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">times</span><span class="p">[</span><span class="s1">&#39;total&#39;</span><span class="p">])</span> <span class="o">*</span> <span class="mi">1000</span>
+    <span class="n">fps</span> <span class="o">=</span> <span class="mi">1000</span> <span class="o">/</span> <span class="n">total_avg</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average FPS: </span><span class="si">{</span><span class="n">fps</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+
+<span class="c1"># Run benchmark</span>
+<span class="n">benchmark_nms</span><span class="p">(</span><span class="s2">&quot;./demo.jpg&quot;</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">num_runs</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="5-tips--best-practices">5. Tips &amp; Best Practices</h2>
+<h3 id="51-chọn-confidence-threshold">5.1. Chọn Confidence Threshold</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Recommended <code>conf_threshold</code></th>
+<th>Lý do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>General purpose</td>
+<td>0.5 - 0.6</td>
+<td>Cân bằng precision/recall</td>
+</tr>
+<tr>
+<td>High precision needed</td>
+<td>0.7 - 0.8</td>
+<td>Giảm false positives</td>
+</tr>
+<tr>
+<td>High recall needed</td>
+<td>0.3 - 0.4</td>
+<td>Detect nhiều objects, chấp nhận FP</td>
+</tr>
+<tr>
+<td>Real-time application</td>
+<td>0.6 - 0.7</td>
+<td>Giảm số boxes cần xử lý → nhanh hơn</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Cách tuning:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Test với nhiều thresholds</span>
+<span class="n">thresholds</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">thresh</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">:</span>
+    <span class="n">dets</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">yolo_postprocess_complete</span><span class="p">(</span>
+        <span class="s2">&quot;test.jpg&quot;</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> 
+        <span class="n">conf_threshold</span><span class="o">=</span><span class="n">thresh</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Threshold </span><span class="si">{</span><span class="n">thresh</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dets</span><span class="p">)</span><span class="si">}</span><span class="s2"> detections&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="52-chọn-iou-threshold">5.2. Chọn IoU Threshold</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Recommended <code>iou_threshold</code></th>
+<th>Ví dụ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Crowded scenes</td>
+<td>0.3 - 0.4</td>
+<td>Crowd counting, traffic</td>
+</tr>
+<tr>
+<td>Normal scenes</td>
+<td>0.5 - 0.6</td>
+<td>General detection</td>
+</tr>
+<tr>
+<td>Sparse objects</td>
+<td>0.6 - 0.7</td>
+<td>Large objects, few overlaps</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Rule of thumb:</strong>
+- IoU càng <strong>thấp</strong> → càng <strong>aggressive</strong> (loại nhiều boxes)
+- IoU càng <strong>cao</strong> → càng <strong>conservative</strong> (giữ nhiều boxes)</p>
+<h3 id="53-tối-ưu-performance">5.3. Tối Ưu Performance</h3>
+<h4 id="vectorized-operations"><strong>Vectorized Operations</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ BAD: Loop từng box</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">slow_nms</span><span class="p">(</span><span class="n">boxes</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">iou_thresh</span><span class="p">):</span>
+    <span class="n">keep</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">boxes</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">removed</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">boxes</span><span class="p">)):</span>
+            <span class="n">iou</span> <span class="o">=</span> <span class="n">calculate_iou</span><span class="p">(</span><span class="n">boxes</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">boxes</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">iou</span> <span class="o">&gt;</span> <span class="n">iou_thresh</span><span class="p">:</span>
+                <span class="n">removed</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">keep</span>
+
+<span class="c1"># ✅ GOOD: Vectorized operations</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fast_nms</span><span class="p">(</span><span class="n">boxes</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">iou_thresh</span><span class="p">):</span>
+    <span class="c1"># Tính tất cả IoUs cùng lúc</span>
+    <span class="n">ious</span> <span class="o">=</span> <span class="n">calculate_iou_matrix</span><span class="p">(</span><span class="n">boxes</span><span class="p">)</span>  <span class="c1"># vectorized</span>
+    <span class="c1"># ... rest of NMS logic</span>
+</code></pre></div>
+
+<p><strong>Performance gain: ~10-50x faster!</strong></p>
+<h4 id="early-stopping"><strong>Early Stopping</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Nếu số detections quá nhiều → tăng conf_threshold</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">filtered_boxes</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ Too many detections, increase conf_threshold!&quot;</span><span class="p">)</span>
+    <span class="n">filtered_boxes</span> <span class="o">=</span> <span class="n">filtered_boxes</span><span class="p">[</span><span class="n">filtered_boxes</span><span class="p">[:,</span> <span class="mi">5</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.7</span><span class="p">]</span>
+</code></pre></div>
+
+<h3 id="54-common-pitfalls">5.4. Common Pitfalls</h3>
+<h4 id="pitfall-1-quên-rescale-coordinates"><strong>Pitfall 1: Quên Rescale Coordinates</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ SAI: Giữ nguyên tọa độ normalized</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_center</span> <span class="o">-</span> <span class="n">width</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># sẽ ra giá trị 0-1</span>
+
+<span class="c1"># ✅ ĐÚNG: Rescale về pixel coordinates</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">((</span><span class="n">x_center</span> <span class="o">-</span> <span class="n">width</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="mi">640</span><span class="p">)</span> <span class="o">*</span> <span class="n">img_width</span>
+</code></pre></div>
+
+<h4 id="pitfall-2-dùng-class-agnostic-nms-khi-có-overlapping-objects"><strong>Pitfall 2: Dùng Class-Agnostic NMS Khi Có Overlapping Objects</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ SAI: NMS chung cho tất cả classes</span>
+<span class="n">all_boxes</span> <span class="o">=</span> <span class="n">combine_all_classes</span><span class="p">(</span><span class="n">detections</span><span class="p">)</span>
+<span class="n">keep</span> <span class="o">=</span> <span class="n">nms</span><span class="p">(</span><span class="n">all_boxes</span><span class="p">)</span>  <span class="c1"># Có thể loại nhầm!</span>
+
+<span class="c1"># ✅ ĐÚNG: NMS riêng cho từng class</span>
+<span class="k">for</span> <span class="n">class_id</span> <span class="ow">in</span> <span class="n">unique_classes</span><span class="p">:</span>
+    <span class="n">class_boxes</span> <span class="o">=</span> <span class="n">filter_by_class</span><span class="p">(</span><span class="n">detections</span><span class="p">,</span> <span class="n">class_id</span><span class="p">)</span>
+    <span class="n">keep</span> <span class="o">=</span> <span class="n">nms</span><span class="p">(</span><span class="n">class_boxes</span><span class="p">)</span>
+</code></pre></div>
+
+<h4 id="pitfall-3-không-clip-coordinates"><strong>Pitfall 3: Không Clip Coordinates</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ❌ SAI: Coordinates có thể âm hoặc vượt quá ảnh</span>
+<span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">convert_coords</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># ✅ ĐÚNG: Clip về giới hạn ảnh</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_width</span><span class="p">)</span>
+<span class="n">y1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_height</span><span class="p">)</span>
+<span class="n">x2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_width</span><span class="p">)</span>
+<span class="n">y2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">y2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">img_height</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="55-debugging-tips">5.5. Debugging Tips</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Visualize intermediate results</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">debug_nms</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">stage_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Vẽ detections ở mỗi stage&quot;&quot;&quot;</span>
+    <span class="n">vis</span> <span class="o">=</span> <span class="n">visualize_detections</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">detections</span><span class="p">)</span>
+    <span class="n">cv2</span><span class="o">.</span><span class="n">imwrite</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;debug_</span><span class="si">{</span><span class="n">stage_name</span><span class="si">}</span><span class="s2">.jpg&quot;</span><span class="p">,</span> <span class="n">vis</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;💾 Saved </span><span class="si">{</span><span class="n">stage_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">detections</span><span class="p">)</span><span class="si">}</span><span class="s2"> boxes&quot;</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="n">filtered</span> <span class="o">=</span> <span class="n">parse_predictions</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="n">debug_nms</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">filtered</span><span class="p">,</span> <span class="s2">&quot;after_filtering&quot;</span><span class="p">)</span>
+
+<span class="n">final</span> <span class="o">=</span> <span class="n">apply_nms</span><span class="p">(</span><span class="n">filtered</span><span class="p">)</span>
+<span class="n">debug_nms</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">final</span><span class="p">,</span> <span class="s2">&quot;after_nms&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="6-faq---câu-hỏi-thường-gặp">6. FAQ - Câu Hỏi Thường Gặp</h2>
+<h3 id="q1-tại-sao-sau-khi-convert-sang-onnx-số-lượng-detections-lại-nhiều-hơn-khi-dùng-ultralytics">Q1: Tại sao sau khi convert sang ONNX, số lượng detections lại nhiều hơn khi dùng Ultralytics?</h3>
+<p><strong>A:</strong> Vì Ultralytics đã apply NMS với default settings (<code>conf=0.25, iou=0.45</code>). Khi bạn convert, bạn nhận raw output chưa qua NMS.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Ultralytics internals (hidden from user)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="s2">&quot;image.jpg&quot;</span><span class="p">)</span>  
+<span class="c1"># ↑ Đã apply NMS inside</span>
+
+<span class="c1"># ONNX (raw output)</span>
+<span class="n">raw_output</span> <span class="o">=</span> <span class="n">onnx_model</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="c1"># ↑ Chưa apply NMS, bạn phải tự làm</span>
+</code></pre></div>
+
+<h3 id="q2-class-aware-nms-có-chậm-hơn-class-agnostic-nms-nhiều-không">Q2: Class-Aware NMS có chậm hơn Class-Agnostic NMS nhiều không?</h3>
+<p><strong>A:</strong> Có, nhưng không đáng kể trong most cases:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Benchmark results (10,000 detections, 80 classes)</span>
+<span class="n">Class</span><span class="o">-</span><span class="n">Agnostic</span> <span class="n">NMS</span><span class="p">:</span> <span class="o">~</span><span class="mi">15</span><span class="n">ms</span>
+<span class="n">Class</span><span class="o">-</span><span class="n">Aware</span> <span class="n">NMS</span><span class="p">:</span>    <span class="o">~</span><span class="mi">25</span><span class="n">ms</span>
+<span class="c1"># Chỉ chậm hơn ~10ms, acceptable!</span>
+</code></pre></div>
+
+<p>Trade-off này <strong>đáng giá</strong> vì accuracy cao hơn nhiều.</p>
+<h3 id="q3-làm-sao-để-detect-objects-rất-nhỏ-small-objects">Q3: Làm sao để detect objects rất nhỏ (small objects)?</h3>
+<p><strong>Tips:</strong>
+1. <strong>Giảm <code>conf_threshold</code></strong>: 0.3 - 0.4 thay vì 0.5
+2. <strong>Giảm <code>iou_threshold</code></strong>: 0.4 thay vì 0.5
+3. <strong>Tăng resolution</strong>: Train/inference ở 1280 thay vì 640
+4. <strong>Multi-scale testing</strong>: Inference nhiều scales rồi combine</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Multi-scale inference</span>
+<span class="n">scales</span> <span class="o">=</span> <span class="p">[</span><span class="mi">640</span><span class="p">,</span> <span class="mi">800</span><span class="p">,</span> <span class="mi">1024</span><span class="p">]</span>
+<span class="n">all_detections</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">scale</span> <span class="ow">in</span> <span class="n">scales</span><span class="p">:</span>
+    <span class="n">dets</span> <span class="o">=</span> <span class="n">inference</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">all_detections</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">dets</span><span class="p">)</span>
+<span class="n">final</span> <span class="o">=</span> <span class="n">apply_nms</span><span class="p">(</span><span class="n">all_detections</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="q4-có-thể-dùng-soft-nms-thay-vì-hard-nms-không">Q4: Có thể dùng Soft-NMS thay vì Hard-NMS không?</h3>
+<p><strong>A:</strong> Có! Soft-NMS giảm score thay vì loại bỏ hoàn toàn.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">soft_nms</span><span class="p">(</span><span class="n">boxes</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">iou_thresh</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Soft-NMS: Giảm score thay vì remove</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">boxes</span><span class="p">)):</span>
+        <span class="n">max_idx</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span>
+
+        <span class="c1"># Tính IoU</span>
+        <span class="n">ious</span> <span class="o">=</span> <span class="n">calculate_iou</span><span class="p">(</span><span class="n">boxes</span><span class="p">[</span><span class="n">max_idx</span><span class="p">],</span> <span class="n">boxes</span><span class="p">)</span>
+
+        <span class="c1"># Decay scores thay vì remove</span>
+        <span class="n">decay</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">ious</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">scores</span> <span class="o">*</span> <span class="n">decay</span>
+        <span class="n">scores</span><span class="p">[</span><span class="n">max_idx</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>  <span class="c1"># Đã xử lý</span>
+
+    <span class="k">return</span> <span class="n">keep_indices</span>
+</code></pre></div>
+
+<p><strong>Soft-NMS tốt hơn cho:</strong>
+- Overlapping objects (people in crowd)
+- Occlusion cases</p>
+<h3 id="q5-output-của-yolo-có-thể-khác-8400-không">Q5: Output của YOLO có thể khác 8400 không?</h3>
+<p><strong>A:</strong> Có! Phụ thuộc vào kiến trúc:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Input Size</th>
+<th>Output Shape</th>
+<th>Số Detections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>YOLOv8n</td>
+<td>640</td>
+<td>(1, 84, 8400)</td>
+<td>8,400</td>
+</tr>
+<tr>
+<td>YOLOv8n</td>
+<td>1280</td>
+<td>(1, 84, 33600)</td>
+<td>33,600</td>
+</tr>
+<tr>
+<td>YOLOv5</td>
+<td>640</td>
+<td>(1, 25200, 85)</td>
+<td>25,200</td>
+</tr>
+</tbody>
+</table></div>
+<p>Công thức: <code>num_detections = Σ(feature_map_h × feature_map_w)</code></p>
+<h3 id="q6-làm-sao-để-deploy-nms-lên-javascriptc">Q6: Làm sao để deploy NMS lên JavaScript/C++?</h3>
+<p><strong>JavaScript (TensorFlow.js):</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">applyNMS</span><span class="p">(</span><span class="nx">boxes</span><span class="p">,</span><span class="w"> </span><span class="nx">scores</span><span class="p">,</span><span class="w"> </span><span class="nx">iouThreshold</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">nmsIndices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">tf</span><span class="p">.</span><span class="nx">image</span><span class="p">.</span><span class="nx">nonMaxSuppressionAsync</span><span class="p">(</span>
+<span class="w">        </span><span class="nx">boxes</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">scores</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">maxOutputSize</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">iouThreshold</span>
+<span class="w">    </span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">nmsIndices</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><strong>C++ (OpenCV):</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;opencv2/dnn.hpp&gt;</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="w"> </span><span class="n">indices</span><span class="p">;</span>
+<span class="n">cv</span><span class="o">::</span><span class="n">dnn</span><span class="o">::</span><span class="n">NMSBoxes</span><span class="p">(</span>
+<span class="w">    </span><span class="n">boxes</span><span class="p">,</span><span class="w">           </span><span class="c1">// std::vector&lt;Rect&gt;</span>
+<span class="w">    </span><span class="n">confidences</span><span class="p">,</span><span class="w">     </span><span class="c1">// std::vector&lt;float&gt;</span>
+<span class="w">    </span><span class="n">conf_threshold</span><span class="p">,</span>
+<span class="w">    </span><span class="n">iou_threshold</span><span class="p">,</span>
+<span class="w">    </span><span class="n">indices</span>
+<span class="p">);</span>
+</code></pre></div>
+
+<h3 id="q7-tại-sao-có-khi-detections-bị-nhấp-nháy-flickering-trong-video">Q7: Tại sao có khi detections bị "nhấp nháy" (flickering) trong video?</h3>
+<p><strong>Nguyên nhân:</strong>
+- Confidence score dao động quanh threshold
+- Boxes không ổn định giữa các frames</p>
+<p><strong>Giải pháp:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Temporal smoothing</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">smooth_detections</span><span class="p">(</span><span class="n">current_dets</span><span class="p">,</span> <span class="n">prev_dets</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Smooth boxes giữa các frames&quot;&quot;&quot;</span>
+    <span class="n">smoothed</span> <span class="o">=</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">current_dets</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="n">prev_dets</span>
+    <span class="k">return</span> <span class="n">smoothed</span>
+
+<span class="c1"># 2. Tracking</span>
+<span class="c1"># Sử dụng tracking algorithms (DeepSORT, ByteTrack)</span>
+<span class="n">tracker</span> <span class="o">=</span> <span class="n">DeepSORT</span><span class="p">()</span>
+<span class="n">tracked_objects</span> <span class="o">=</span> <span class="n">tracker</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">detections</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="q8-performance-của-nms-trong-real-time-apps">Q8: Performance của NMS trong real-time apps?</h3>
+<p><strong>Benchmarks (YOLOv8n, 640x640, CPU):</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Time</th>
+<th>% of Total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Preprocessing</td>
+<td>2ms</td>
+<td>10%</td>
+</tr>
+<tr>
+<td>Inference</td>
+<td>15ms</td>
+<td>70%</td>
+</tr>
+<tr>
+<td><strong>NMS</strong></td>
+<td><strong>4ms</strong></td>
+<td><strong>20%</strong></td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>21ms</strong></td>
+<td><strong>100%</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Kết luận:</strong> NMS chỉ chiếm ~20% thời gian, không phải bottleneck!</p>
+<hr />
+<h2 id="7-kết-luận">7. Kết Luận</h2>
+<h3 id="-key-takeaways">🎯 Key Takeaways</h3>
+<ol>
+<li><strong>NMS là bắt buộc</strong> khi deploy YOLO models sang các format khác</li>
+<li><strong>Class-Aware NMS</strong> tốt hơn Class-Agnostic cho general object detection</li>
+<li><strong>Tuning thresholds</strong> (<code>conf_threshold</code>, <code>iou_threshold</code>) rất quan trọng</li>
+<li><strong>Vectorized operations</strong> giúp tăng tốc đáng kể</li>
+<li><strong>Testing</strong> trên nhiều scenarios để tìm best settings</li>
+</ol>
+<h3 id="-kiến-thức-bạn-đã-học">📚 Kiến Thức Bạn Đã Học</h3>
+<ul>
+<li>✅ Hiểu output thô của YOLO models (8400 × 84)</li>
+<li>✅ Cách tính IoU giữa 2 bounding boxes</li>
+<li>✅ Quy trình 5 bước của NMS post-processing</li>
+<li>✅ Implement NMS từ đầu bằng NumPy</li>
+<li>✅ Best practices và common pitfalls</li>
+<li>✅ Tips để optimize performance</li>
+</ul>
+<h3 id="-next-steps">🚀 Next Steps</h3>
+<ol>
+<li><strong>Practice</strong>: Implement NMS cho custom datasets</li>
+<li><strong>Experiment</strong>: Test với các IoU thresholds khác nhau</li>
+<li><strong>Deploy</strong>: Port code sang JavaScript/C++ cho production</li>
+<li><strong>Advanced</strong>: Tìm hiểu Soft-NMS, DIoU-NMS</li>
+<li><strong>Tracking</strong>: Combine NMS với object tracking algorithms</li>
+</ol>
+<h3 id="-tài-liệu-tham-khảo">📖 Tài Liệu Tham Khảo</h3>
+<ol>
+<li><a href="https://github.com/ultralytics/ultralytics">Ultralytics YOLOv8 Official</a></li>
+<li><a href="https://dev.to/andreygermanov/how-to-create-yolov8-based-object-detection-web-service-using-python-julia-nodejs-javascript-go-and-rust-4o8e">YOLO Post-Processing Guide</a></li>
+<li><a href="https://arxiv.org/abs/1704.04503">Original NMS Paper</a></li>
+<li><a href="https://arxiv.org/abs/1704.04503">Soft-NMS Paper</a></li>
+<li><a href="https://onnxruntime.ai/docs/">ONNX Runtime Documentation</a></li>
+</ol>
+<hr />
+<h2 id="-có-thắc-mắc">🙋‍♂️ Có Thắc Mắc?</h2>
+<p>Nếu bạn có câu hỏi hoặc gặp vấn đề khi implement NMS, feel free để lại comment bên dưới! Mình sẽ cố gắng trả lời sớm nhất có thể.</p>
+<p><strong>Happy Coding!</strong> 🚀</p>
+<hr />
+<p><em>Bài viết được viết bởi Le Hoang Viet</em></p>
+<p><em>Cập nhật lần cuối: 17th Feb 2026</em></p>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>

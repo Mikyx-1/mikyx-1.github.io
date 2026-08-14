@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vision Transformer (ViT) - Khi Transformer Học Cách Nhìn &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Vision Transformer (ViT) - Khi Transformer Học Cách Nhìn</h2>
+<p class="date">2024-05-23 &middot; vision transformer, computer vision, architecture</p>
+
+<p>Bài viết này sẽ giải thích kiến trúc Vision Transformer từ lý thuyết đến code from scratch, giúp bạn hiểu tại sao ViT lại là một bước ngoặt lớn trong Computer Vision.</p>
+<hr />
+<h2 id="mục-lục">Mục Lục</h2>
+<ol>
+<li><a href="#1-vit-giải-quyết-vấn-đề-gì">ViT Giải Quyết Vấn Đề Gì?</a></li>
+<li><a href="#2-patch--biến-ảnh-thành-từ">Patch — Biến Ảnh Thành "Từ"</a></li>
+<li><a href="#3-kiến-trúc-chi-tiết">Kiến Trúc Chi Tiết</a></li>
+<li><a href="#4-implement-vit-từ-đầu">Implement ViT Từ Đầu</a></li>
+<li><a href="#5-training-trên-cifar-10">Training Trên CIFAR-10</a></li>
+<li><a href="#6-tips--best-practices">Tips &amp; Best Practices</a></li>
+<li><a href="#7-faq---câu-hỏi-thường-gặp">FAQs - Câu Hỏi Thường Gặp</a></li>
+</ol>
+<hr />
+<h2 id="1-vit-giải-quyết-vấn-đề-gì">1. ViT Giải Quyết Vấn Đề Gì?</h2>
+<p>Sau khi Transformer ra mắt vào năm <strong>2017</strong> (trong paper <em>"Attention Is All You Need"</em>), nó đã tạo ra một cuộc cách mạng trong NLP — thay thế hoàn toàn các kiến trúc RNN/LSTM vốn chậm và khó song song hóa.</p>
+<p>Tuy nhiên, câu hỏi đặt ra là: <strong>Transformer có thể dùng cho ảnh không?</strong></p>
+<p>Vấn đề cốt lõi là Transformer được thiết kế để xử lý <strong>chuỗi (sequence)</strong> — một dãy các token rời rạc. Trong khi đó, ảnh là một <strong>lưới 2D pixel liên tục</strong>, hoàn toàn khác về bản chất. Để dùng Transformer thẳng cho ảnh, bạn sẽ phải flatten toàn bộ pixel — với ảnh 224×224, đó là <strong>50,176 token</strong> cho mỗi tấm hình, bộ nhớ sẽ bùng nổ ngay lập tức.</p>
+<p><strong>Alexey Dosovitskiy et al.</strong> đã giải quyết vấn đề này trong paper nổi tiếng:</p>
+<blockquote>
+<p><em>"An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"</em> (2020)</p>
+</blockquote>
+<p>Ý tưởng cốt lõi rất đơn giản: <strong>Chia tấm ảnh thành các mảnh nhỏ (patches), mỗi patch tương đương một "từ" trong câu.</strong> Bằng cách đó, một ảnh 224×224 với patch size 16×16 chỉ còn <strong>(224/16)² = 196 token</strong> — giảm hơn 250 lần.</p>
+<hr />
+<h2 id="2-patch--biến-ảnh-thành-từ">2. Patch — Biến Ảnh Thành "Từ"</h2>
+<h3 id="21-phép-biến-đổi-cốt-lõi">2.1 Phép Biến Đổi Cốt Lõi</h3>
+<p>Toàn bộ sự khác biệt giữa ViT và Transformer gốc nằm ở bước tiền xử lý input này:</p>
+<div class="codehilite"><pre><span></span><code>Ảnh gốc:    (H, W, C)
+              ↓  chia thành các patch
+Patch:       (N, P×P×C)
+</code></pre></div>
+
+<p>Trong đó:
+- <code>H, W</code> — chiều cao và chiều rộng của ảnh
+- <code>C</code> — số channel (thường là 3 cho RGB)
+- <code>P</code> — patch size (thường là 16)
+- <code>N = (H/P) × (W/P)</code> — số lượng patches (số "từ" trong câu)</p>
+<p>Ví dụ với ảnh ImageNet chuẩn (224×224×3) và patch size 16:
+- Số patch: <code>(224/16) × (224/16) = 14 × 14 = 196 patches</code>
+- Mỗi patch có kích thước: <code>16 × 16 × 3 = 768 chiều</code></p>
+<h3 id="22-class-token--positional-encoding">2.2 Class Token &amp; Positional Encoding</h3>
+<p>Sau khi có các patches, ViT thêm hai thứ quan trọng:</p>
+<p><strong>Class Token <code>[CLS]</code></strong>: Một token đặc biệt được thêm vào đầu chuỗi, học cách tổng hợp thông tin từ toàn bộ ảnh. Output của token này sẽ được dùng để phân loại (tương tự <code>[CLS]</code> trong BERT).</p>
+<p><strong>Positional Embedding</strong>: Transformer không có khái niệm thứ tự, nên ta phải cộng thêm thông tin vị trí vào mỗi patch embedding để mô hình biết patch này nằm ở đâu trong ảnh.</p>
+<p><img alt="ViT Architecture" src="../images/vit_architecture.png" />
+<em>Hình: Kiến trúc Vision Transformer — ảnh được chia thành patches, qua embedding rồi đưa vào Transformer encoder</em></p>
+<hr />
+<h2 id="3-kiến-trúc-chi-tiết">3. Kiến Trúc Chi Tiết</h2>
+<p>ViT gồm 3 phần chính:</p>
+<div class="codehilite"><pre><span></span><code>Input Image
+    │
+    ▼
+┌─────────────────┐
+│  Patch Extractor │  ← Chia ảnh thành N patches
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Embedding Layer │  ← Linear projection + Positional Encoding
+└────────┬────────┘
+         │
+         ▼
+┌──────────────────────────────┐
+│   Transformer Encoder        │
+│  ┌────────────────────────┐  │
+│  │  Multi-Head Attention  │  │
+│  │  + Layer Norm          │  │
+│  ├────────────────────────┤  │
+│  │  Feed Forward Block    │  │
+│  │  + Layer Norm          │  │
+│  └────────────────────────┘  │
+│        × L layers            │
+└────────┬─────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  MLP Head       │  ← Output class probabilities
+└─────────────────┘
+</code></pre></div>
+
+<p>Sau khi qua Transformer, ta flatten output và đưa qua một lớp linear để dự đoán class. Trong bản gốc của paper, chỉ có class token được dùng cho classification — nhưng trong implement đơn giản hóa dưới đây, ta sẽ flatten toàn bộ output.</p>
+<hr />
+<h2 id="4-implement-vit-từ-đầu">4. Implement ViT Từ Đầu</h2>
+<h3 id="41-setup">4.1 Setup</h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</code></pre></div>
+
+<h3 id="42-patch-extractor">4.2 Patch Extractor</h3>
+<p>Module này nhận vào một batch ảnh và trả về các patches dưới dạng chuỗi:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PatchExtractor</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">=</span> <span class="n">patch_size</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="c1"># x shape: (batch_size, channels, height, width)</span>
+        <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+
+        <span class="k">assert</span> <span class="n">H</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">W</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> \
+            <span class="sa">f</span><span class="s2">&quot;Image size (</span><span class="si">{</span><span class="n">H</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="n">W</span><span class="si">}</span><span class="s2">) phải chia hết cho patch_size (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="si">}</span><span class="s2">)&quot;</span>
+
+        <span class="n">num_patches_h</span> <span class="o">=</span> <span class="n">H</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span>
+        <span class="n">num_patches_w</span> <span class="o">=</span> <span class="n">W</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span>
+        <span class="n">num_patches</span> <span class="o">=</span> <span class="n">num_patches_h</span> <span class="o">*</span> <span class="n">num_patches_w</span>
+
+        <span class="c1"># unfold: trích xuất sliding windows theo chiều H và W</span>
+        <span class="n">patches</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">x</span><span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">)</span>
+             <span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">)</span>
+             <span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+             <span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
+             <span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">num_patches</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="c1"># Output shape: (batch_size, num_patches, patch_size*patch_size*channels)</span>
+        <span class="k">return</span> <span class="n">patches</span>
+</code></pre></div>
+
+<p><strong>Giải thích từng bước:</strong>
+- <code>unfold(2, P, P)</code> — trượt cửa sổ <code>P×P</code> theo chiều H
+- <code>unfold(3, P, P)</code> — trượt theo chiều W
+- <code>permute(0, 2, 3, 1, 4, 5)</code> — sắp xếp lại thành <code>(B, nH, nW, C, P, P)</code>
+- <code>view(B, num_patches, -1)</code> — flatten mỗi patch thành vector 1D</p>
+<h3 id="43-embedding-layer">4.3 Embedding Layer</h3>
+<p>Chiếu mỗi patch lên không gian <code>latent_size</code> chiều và cộng thêm positional encoding:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">EmbeddingLayer</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_size</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">num_patches</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">input_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span> <span class="o">=</span> <span class="n">num_patches</span>
+
+        <span class="c1"># Chiếu patch thô → latent space</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_embedder</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">input_dim</span><span class="p">,</span> <span class="n">latent_size</span><span class="p">)</span>
+
+        <span class="c1"># Học positional encoding từ chỉ số vị trí</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_embedder</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">latent_size</span><span class="p">)</span>
+
+        <span class="c1"># Tạo chỉ số vị trí: [0, 1, 2, ..., num_patches-1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span>
+            <span class="s1">&#39;positional_information&#39;</span><span class="p">,</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_patches</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_patches</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="c1"># x shape: (N, num_patches, input_dim)</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">input_embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_embedder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="n">pos_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">positional_information</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">positional_embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_embedder</span><span class="p">(</span><span class="n">pos_info</span><span class="p">)</span>
+
+        <span class="c1"># Cộng patch embedding và positional embedding</span>
+        <span class="k">return</span> <span class="n">input_embedding</span> <span class="o">+</span> <span class="n">positional_embedding</span>
+</code></pre></div>
+
+<blockquote>
+<p>💡 <strong>Lưu ý</strong>: Ở đây ta dùng <code>register_buffer</code> thay vì <code>self.positional_information</code> để <code>positional_information</code> tự động chuyển sang đúng device (CPU/GPU) cùng với model.</p>
+</blockquote>
+<h3 id="44-model-vit">4.4 Model ViT</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ViT</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">patch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+        <span class="n">img_dimension</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span>
+        <span class="n">latent_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
+        <span class="n">num_heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">img_dimension</span>
+        <span class="k">assert</span> <span class="n">H</span> <span class="o">%</span> <span class="n">patch_size</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">W</span> <span class="o">%</span> <span class="n">patch_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> \
+            <span class="s2">&quot;Kích thước ảnh phải chia hết cho patch_size!&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span> <span class="o">=</span> <span class="p">(</span><span class="n">H</span> <span class="o">//</span> <span class="n">patch_size</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">W</span> <span class="o">//</span> <span class="n">patch_size</span><span class="p">)</span>
+        <span class="n">input_dim</span> <span class="o">=</span> <span class="n">patch_size</span> <span class="o">*</span> <span class="n">patch_size</span> <span class="o">*</span> <span class="mi">3</span>  <span class="c1"># 3 channels RGB</span>
+
+        <span class="c1"># --- Các thành phần chính ---</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patchifier</span> <span class="o">=</span> <span class="n">PatchExtractor</span><span class="p">(</span><span class="n">patch_size</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedding_layer</span> <span class="o">=</span> <span class="n">EmbeddingLayer</span><span class="p">(</span>
+            <span class="n">latent_size</span><span class="o">=</span><span class="n">latent_size</span><span class="p">,</span>
+            <span class="n">num_patches</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="p">,</span>
+            <span class="n">input_dim</span><span class="o">=</span><span class="n">input_dim</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Multi-Head Self-Attention</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">multi_head_attn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MultiheadAttention</span><span class="p">(</span>
+            <span class="n">embed_dim</span><span class="o">=</span><span class="n">latent_size</span><span class="p">,</span>
+            <span class="n">num_heads</span><span class="o">=</span><span class="n">num_heads</span><span class="p">,</span>
+            <span class="n">dropout</span><span class="o">=</span><span class="n">dropout</span><span class="p">,</span>
+            <span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Input: (batch, seq, feature)</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm_1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">latent_size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm_2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">latent_size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout</span><span class="p">)</span>
+
+        <span class="c1"># Feed Forward Block: mở rộng → thu hẹp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">feed_forward</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">latent_size</span><span class="p">,</span> <span class="n">latent_size</span> <span class="o">*</span> <span class="mi">4</span><span class="p">),</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(),</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout</span><span class="p">),</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">latent_size</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span> <span class="n">latent_size</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Classification head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_layer</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">latent_size</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="c1"># Bước 1: Tách ảnh thành patches</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">patchifier</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>                          <span class="c1"># (B, N, P*P*C)</span>
+
+        <span class="c1"># Bước 2: Embedding + Positional Encoding</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding_layer</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>                     <span class="c1"># (B, N, latent_size)</span>
+
+        <span class="c1"># Bước 3: Multi-Head Self-Attention với residual connection</span>
+        <span class="n">attn_out</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">multi_head_attn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_1</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">attn_out</span><span class="p">)</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span>     <span class="c1"># Pre-norm + residual</span>
+
+        <span class="c1"># Bước 4: Feed Forward với residual connection</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">feed_forward</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span>       <span class="c1"># (B, N, latent_size)</span>
+
+        <span class="c1"># Bước 5: Flatten và phân loại</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>                      <span class="c1"># (B, N*latent_size)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_layer</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>                         <span class="c1"># (B, num_classes)</span>
+        <span class="k">return</span> <span class="n">x</span>
+</code></pre></div>
+
+<p><strong>Các cải tiến so với phiên bản gốc:</strong>
+- Thêm <code>batch_first=True</code> cho <code>MultiheadAttention</code> — input đúng format <code>(B, N, D)</code>
+- Dùng <code>GELU</code> thay vì <code>ReLU</code> trong FFN (đúng với paper gốc)
+- Dropout regularization để giảm overfitting
+- <code>register_buffer</code> cho positional info để tự động chuyển device</p>
+<hr />
+<h2 id="5-training-trên-cifar-10">5. Training Trên CIFAR-10</h2>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torchvision</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torchvision.transforms</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">transforms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">optim</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
+
+<span class="c1"># --- Data ---</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">Compose</span><span class="p">([</span>
+    <span class="n">transforms</span><span class="o">.</span><span class="n">ToTensor</span><span class="p">(),</span>
+    <span class="n">transforms</span><span class="o">.</span><span class="n">Normalize</span><span class="p">((</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)),</span>
+<span class="p">])</span>
+
+<span class="n">BATCH_SIZE</span> <span class="o">=</span> <span class="mi">64</span>
+
+<span class="n">trainset</span> <span class="o">=</span> <span class="n">torchvision</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">CIFAR10</span><span class="p">(</span><span class="n">root</span><span class="o">=</span><span class="s1">&#39;./data&#39;</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="n">transform</span><span class="p">)</span>
+<span class="n">testset</span>  <span class="o">=</span> <span class="n">torchvision</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">CIFAR10</span><span class="p">(</span><span class="n">root</span><span class="o">=</span><span class="s1">&#39;./data&#39;</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="n">transform</span><span class="p">)</span>
+
+<span class="n">trainloader</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">DataLoader</span><span class="p">(</span><span class="n">trainset</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">testloader</span>  <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">DataLoader</span><span class="p">(</span><span class="n">testset</span><span class="p">,</span>  <span class="n">batch_size</span><span class="o">=</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">num_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">CLASSES</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;plane&#39;</span><span class="p">,</span> <span class="s1">&#39;car&#39;</span><span class="p">,</span> <span class="s1">&#39;bird&#39;</span><span class="p">,</span> <span class="s1">&#39;cat&#39;</span><span class="p">,</span> <span class="s1">&#39;deer&#39;</span><span class="p">,</span> <span class="s1">&#39;dog&#39;</span><span class="p">,</span> <span class="s1">&#39;frog&#39;</span><span class="p">,</span> <span class="s1">&#39;horse&#39;</span><span class="p">,</span> <span class="s1">&#39;ship&#39;</span><span class="p">,</span> <span class="s1">&#39;truck&#39;</span><span class="p">)</span>
+
+<span class="c1"># --- Model ---</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">ViT</span><span class="p">(</span>
+    <span class="n">patch_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>           <span class="c1"># 32/8 = 4 patches mỗi chiều → 16 patches tổng</span>
+    <span class="n">img_dimension</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span>
+    <span class="n">latent_size</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">num_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Số tham số: </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># --- Training ---</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>
+<span class="n">scheduler</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">CosineAnnealingLR</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">T_max</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">loss_fn</span>   <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">train_epoch</span><span class="p">(</span><span class="n">loader</span><span class="p">):</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+    <span class="n">total_loss</span><span class="p">,</span> <span class="n">correct</span><span class="p">,</span> <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Training&quot;</span><span class="p">):</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+        <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+        <span class="n">total_loss</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">correct</span> <span class="o">+=</span> <span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">total_loss</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">loader</span><span class="p">),</span> <span class="n">correct</span> <span class="o">/</span> <span class="n">total</span>
+
+<span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="n">loader</span><span class="p">):</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="n">total_loss</span><span class="p">,</span> <span class="n">correct</span><span class="p">,</span> <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Evaluating&quot;</span><span class="p">):</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">total_loss</span> <span class="o">+=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">correct</span> <span class="o">+=</span> <span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">total_loss</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">loader</span><span class="p">),</span> <span class="n">correct</span> <span class="o">/</span> <span class="n">total</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="n">epochs</span><span class="o">=</span><span class="mi">20</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epochs</span><span class="p">):</span>
+        <span class="n">train_loss</span><span class="p">,</span> <span class="n">train_acc</span> <span class="o">=</span> <span class="n">train_epoch</span><span class="p">(</span><span class="n">trainloader</span><span class="p">)</span>
+        <span class="n">val_loss</span><span class="p">,</span> <span class="n">val_acc</span>     <span class="o">=</span> <span class="n">evaluate</span><span class="p">(</span><span class="n">testloader</span><span class="p">)</span>
+        <span class="n">scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">epochs</span><span class="si">}</span><span class="s2"> | &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;Train Loss: </span><span class="si">{</span><span class="n">train_loss</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> Acc: </span><span class="si">{</span><span class="n">train_acc</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> | &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;Val Loss: </span><span class="si">{</span><span class="n">val_loss</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> Acc: </span><span class="si">{</span><span class="n">val_acc</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">train</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+</code></pre></div>
+
+<blockquote>
+<p><strong>Kết quả tham khảo</strong>: Với thiết lập trên, sau ~20 epochs, bạn có thể đạt khoảng <strong>60-65% accuracy</strong> trên CIFAR-10. ViT nhỏ không giỏi trên dataset nhỏ — đây là điểm yếu nổi tiếng của kiến trúc này (xem thêm ở phần FAQ).</p>
+</blockquote>
+<hr />
+<h2 id="6-tips--best-practices">6. Tips &amp; Best Practices</h2>
+<p><strong>Chọn patch size phù hợp</strong>
+Patch size phải là ước số của cả H và W. Patch nhỏ hơn → nhiều token hơn → context phong phú hơn nhưng tốn bộ nhớ hơn. Với ảnh 32×32, dùng <code>patch_size=4</code> hoặc <code>8</code>. Với ảnh 224×224, dùng <code>patch_size=16</code> hoặc <code>32</code>.</p>
+<p><strong>ViT cần nhiều dữ liệu</strong>
+ViT thiếu inductive bias về cấu trúc cục bộ (như CNN), nên cần dataset lớn (ít nhất vài trăm nghìn ảnh) để hội tụ tốt. Với dataset nhỏ như CIFAR-10, hãy dùng <strong>pretrained ViT</strong> và fine-tune.</p>
+<p><strong>Dùng pretrained model khi có thể</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Thay vì train from scratch, dùng torchvision hoặc timm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">timm</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">timm</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="s1">&#39;vit_base_patch16_224&#39;</span><span class="p">,</span> <span class="n">pretrained</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Learning rate và warmup</strong>
+Transformer rất nhạy với learning rate. Nên dùng learning rate warmup + cosine decay, và <code>AdamW</code> thay vì <code>Adam</code>.</p>
+<p><strong>Regularization</strong>
+Thêm <code>Dropout</code> (0.1-0.2) và <code>weight_decay</code> trong optimizer để tránh overfitting, đặc biệt khi train từ đầu.</p>
+<hr />
+<h2 id="7-faq---câu-hỏi-thường-gặp">7. FAQ - Câu Hỏi Thường Gặp</h2>
+<p><strong>❓ Tại sao ViT kém hơn CNN trên dataset nhỏ?</strong></p>
+<p>CNN có sẵn hai "thiên kiến quy nạp" (inductive bias): <em>locality</em> (pixel gần nhau thường liên quan) và <em>translation equivariance</em> (object ở đâu cũng nhận ra). ViT không có những giả định này — nó học chúng từ dữ liệu. Vì vậy ViT cần nhiều dữ liệu hơn để bù lại, nhưng khi có đủ data nó thường vượt trội CNN.</p>
+<p><strong>❓ Class token <code>[CLS]</code> là gì và có bắt buộc không?</strong></p>
+<p><code>[CLS]</code> là một vector học được, đặt ở đầu chuỗi. Sau khi qua Transformer, nó sẽ "attend" đến tất cả patches và tổng hợp thông tin toàn ảnh. Trong paper gốc, chỉ output của <code>[CLS]</code> token được dùng để phân loại. Không bắt buộc — một số variant dùng average pooling trên tất cả token thay thế.</p>
+<p><strong>❓ Positional Encoding học được hay cố định?</strong></p>
+<p>Paper gốc dùng positional encoding <strong>học được</strong> (learned), không phải sinusoidal cố định. Thú vị là kết quả không khác nhau nhiều giữa hai cách, nhưng learned encoding thường linh hoạt hơn.</p>
+<p><strong>❓ ViT có thể xử lý ảnh kích thước khác nhau không?</strong></p>
+<p>Không dễ dàng. Vì positional encoding cố định theo số patches, nếu ảnh thay đổi kích thước thì số patches thay đổi và encoding không khớp nữa. Một số giải pháp: interpolate positional encoding, dùng RoPE (Rotary Positional Embedding), hoặc resize ảnh về kích thước cố định trước.</p>
+<p><strong>❓ Sự khác biệt giữa ViT-B, ViT-L, ViT-H là gì?</strong></p>
+<p>Đây là các biến thể kích thước khác nhau trong paper gốc:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Layers</th>
+<th>Hidden size D</th>
+<th>MLP size</th>
+<th>Heads</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ViT-B</td>
+<td>12</td>
+<td>768</td>
+<td>3072</td>
+<td>12</td>
+<td>86M</td>
+</tr>
+<tr>
+<td>ViT-L</td>
+<td>24</td>
+<td>1024</td>
+<td>4096</td>
+<td>16</td>
+<td>307M</td>
+</tr>
+<tr>
+<td>ViT-H</td>
+<td>32</td>
+<td>1280</td>
+<td>5120</td>
+<td>16</td>
+<td>632M</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="kết">Kết</h2>
+<p>Trong bài viết này, mình đã giới thiệu Vision Transformer từ vấn đề nó giải quyết, đi sâu vào từng thành phần kiến trúc, và implement hoàn chỉnh from scratch. Điểm mấu chốt cần nhớ: <strong>ViT chỉ là Transformer gốc, với bước tiền xử lý đặc biệt biến ảnh thành chuỗi patch.</strong></p>
+<p>Ở các bài tiếp theo, mình sẽ giới thiệu các kiến trúc transformer-based khác cho các task phức tạp hơn như <strong>image segmentation (Segmenter, Mask2Former)</strong> và <strong>object detection (DETR, DINO)</strong>. Chúc các bạn học tốt! 🚀</p>
+<hr />
+<h2 id="references">References</h2>
+<ol>
+<li><a href="https://arxiv.org/abs/2010.11929">An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale</a> — Dosovitskiy et al., 2020</li>
+<li><a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a> — Vaswani et al., 2017</li>
+<li><a href="https://arxiv.org/abs/2012.12877">Training data-efficient image transformers &amp; distillation through attention (DeiT)</a> — Touvron et al., 2021</li>
+</ol>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>
