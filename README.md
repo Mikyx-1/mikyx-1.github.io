@@ -2,11 +2,16 @@
 
 Personal site. Static HTML/CSS with a small Python build step for blog posts.
 
-Black on white, no color beyond default link blue. Typography and page
+Black on white, no color beyond the one link blue. Typography and page
 furniture follow [jondeaton.github.io](https://jondeaton.github.io/): Optima
 (humanist sans), 800px measure, `line-height: 1.5`, a right-aligned pill nav
 over a dashed rule, portrait floated right at 200px, and code in Lucida
 Console. Syntax highlighting is bold/italic only — no color.
+
+Links take their `#0645ad` from [joschu.net](http://joschu.net/), and a visited
+link keeps it instead of turning purple — on an index of a few hundred posts the
+browser default paints half the page a second colour to report reading history,
+which is not something the page is trying to say.
 
 ## Layout
 

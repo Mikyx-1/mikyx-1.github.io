@@ -10,6 +10,32 @@ body {
 }
 
 /* ---------------------------------------------------------------
+   Links
+
+   The blue is joschu.net's. A visited link keeps it rather than
+   turning purple: in a list of a few hundred posts the browser
+   default splits the page into two colours by reading history,
+   which says nothing about the posts themselves.
+   --------------------------------------------------------------- */
+
+a,
+a:visited {
+  color: #0645ad;
+}
+
+a:hover {
+  color: #06e;
+}
+
+a:active {
+  color: #faa700;
+}
+
+a:focus {
+  outline: thin dotted;
+}
+
+/* ---------------------------------------------------------------
    Header and footer
    --------------------------------------------------------------- */
 
