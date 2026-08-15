@@ -18,6 +18,8 @@ which is not something the page is trying to say.
 ```
 index.html               bio + links (text left, photo right)   — hand-written
 cv/Resume.pdf            the CV, linked from index.html         — drop in a new one
+cv/index.html            keeps the old /cv/ URL working
+cv.html                  keeps the old /cv.html URL working
 posts/YYYY/*.md          post sources, with YAML front matter   — edit these
 blog.html                search box over every post             — GENERATED
 blog/*.html              rendered posts                         — GENERATED
