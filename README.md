@@ -17,7 +17,9 @@ which is not something the page is trying to say.
 
 ```
 index.html               bio + links (text left, photo right)   — hand-written
-cv.html                  CV                                     — hand-written
+cv/Resume.pdf            the CV itself                          — drop in a new one
+cv/index.html            sends /cv/ to the PDF
+cv.html                  sends the old /cv.html to the PDF
 posts/YYYY/*.md          post sources, with YAML front matter   — edit these
 blog.html                search box over every post             — GENERATED
 blog/*.html              rendered posts                         — GENERATED
