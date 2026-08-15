@@ -14,33 +14,118 @@
 
 <h2>CV</h2>
 
+<p>AI engineer in Ho Chi Minh City, Vietnam. Also available as a
+<a href="files/Resume.pdf">PDF</a>. Reach me by
+<a href="mailto:lehoangviet2k@gmail.com">email</a>, or on
+<a href="https://github.com/Mikyx-1">GitHub</a> and
+<a href="https://scholar.google.com/citations?user=b8GB-X0AAAAJ&amp;hl=en">Google Scholar</a>.</p>
+
 <h3>Education</h3>
 <ul>
-<li><b>B.Eng. in Automation &amp; Control</b> <span class="date">(2023)</span><br>
-Ho Chi Minh University of Technology, VNU-HCM<br>
+<li><b>B.Eng. in Automation &amp; Control Engineering</b>
+<span class="date">(Aug 2018 &ndash; Nov 2023)</span><br>
+Ho Chi Minh University of Technology, Vietnam National University, HCMC<br>
 Advisor: <a href="https://scholar.google.com/citations?user=Ro1Ya1cAAAAJ&amp;hl=en">Dr. Pham Viet Cuong</a></li>
 </ul>
 
 <h3>Experience</h3>
 <ul>
-<li><b>AI Engineer</b>, MonoRevo, Inc. <span class="date">(Apr 2025 &ndash; present)</span><br>
-Vision&ndash;language models, OCR, similarity retrieval, optimisation.<br>
-Supervisor: Shunsuke Morimatsu</li>
+<li><b>AI Engineer</b>, MonoRevo, Inc., HCMC
+<span class="date">(Apr 2025 &ndash; present)</span>
+<ul>
+<li>Applied a vision&ndash;language model with structured output prompting and
+chain-of-thought reasoning to engineering drawing analysis, replacing
+PaddleOCR and improving accuracy by 35%.</li>
+<li>Fused MatMul&ndash;activation layers in an LLM serving pipeline, delivering
+16% faster inference at production scale.</li>
+<li>Implemented the Rocchio algorithm for human feedback on 2D/3D similarity
+search.</li>
+</ul>
+</li>
 
-<li><b>Computer Vision Engineer</b>, Ftech <span class="date">(Nov 2023 &ndash; Apr 2025)</span><br>
-Image segmentation, image processing, optimisation.<br>
-Supervisor: Tran Nhat Quang</li>
+<li><b>Computer Vision Engineer</b>, Ftech Co. Ltd, Da Nang
+<span class="date">(Nov 2023 &ndash; Apr 2025)</span>
+<ul>
+<li>Fine-tuned SegFormer-B0 with motion-aware augmentation for +13% mIoU, and
+deployed it as a C++ OBS plug-in.</li>
+<li>Ported OpenCV's <code>guidedFilter</code> to the GPU and alpha-matting to
+PyTorch, removing CPU bottlenecks on high-resolution video.</li>
+<li>Built a fault-tolerant distributed video-processing pipeline for VTV Cab,
+automating broadcast production.</li>
+</ul>
+</li>
 
-<li><b>AI Engineer</b>, Bosch Global Software Technologies, Vietnam <span class="date">(Apr 2023 &ndash; Nov 2023)</span><br>
-Image processing, data crawling, object detection, activity recognition, edge computing.<br>
-Supervisor: Imran Abdul Rahiman</li>
+<li><b>AI Engineer</b>, Bosch Global Software Technologies, HCMC
+<span class="date">(May 2023 &ndash; Nov 2023)</span>
+<ul>
+<li>Delivered a driver-behaviour analysis system covering gaze, drowsiness and
+occupancy, showcased at ETAS 2023.</li>
+<li>Knowledge-distilled YOLOv7-E6E into YOLOv5-S for Jetson Nano deployment,
+losing only 8% mAP-0.5.</li>
+</ul>
+</li>
+</ul>
+
+<h3>Selected projects</h3>
+<ul>
+<li><b><a href="https://github.com/Mikyx-1/Reinforcement-Learning">Reinforcement Learning Zoo</a></b><br>
+<i>PyTorch, Gymnasium, MuJoCo, Atari/ALE, Weights &amp; Biases</i>
+<ul>
+<li>A benchmarking hub for 9 algorithms &mdash; PPO, SAC, TD3, DDPG, DQN, A2C,
+REINFORCE, SARSA and GNN-PPO &mdash; spanning MLP, CNN and GNN policies under
+one interface.</li>
+<li>Seeded, reproducible evaluation matching paper-level scores: 5512 &plusmn; 25
+on MuJoCo Humanoid-v5 and 100/100 on ALE/Boxing-v5.</li>
+</ul>
+</li>
+
+<li><b><a href="https://github.com/Mikyx-1/TinyLLM">Tiny LLM</a></b><br>
+<i>PyTorch</i>
+<ul>
+<li>A 60M-parameter GPT-style model built from scratch: BPE tokenizer,
+transformer with a hand-rolled KV cache, and the full training stack from
+pretraining through instruction SFT to reasoning fine-tuning.</li>
+<li>Tool-augmented reasoning via ChatML <code>&lt;CALC&gt;</code> tokens spliced
+with a safe AST calculator at decode time, plus bfloat16 mixed-precision
+multi-GPU DDP training and a stdlib-only token-streaming web chat.</li>
+</ul>
+</li>
+
+<li><b><a href="https://github.com/TylerYep/torchinfo">torchinfo</a></b> (contributor)<br>
+<i>PyTorch</i>
+<ul>
+<li>Made parameter and computation counting accurate for modern architectures
+&mdash; LLMs, VLMs and YOLO detectors &mdash; correcting counts for tied
+embeddings, weight-shared submodules, and parameters held on non-leaf
+layers.</li>
+<li>Fixed kernel-size handling for 0-d tensors, and extended supported inputs to
+dictionaries with non-tensor values, scalar tensors and
+<code>torch.distributions</code> outputs.</li>
+</ul>
+</li>
+</ul>
+
+<h3>Achievements</h3>
+<ul>
+<li><b>OpenAI Codex for Open Source grant</b>, $1,320
+<span class="date">(Aug 2026)</span></li>
+<li><b>Kaggle Expert</b> <span class="date">(Oct 2024)</span></li>
+<li><b>High Achiever Scholarship</b> <span class="date">(2023)</span><br>
+Awarded to the top 1% of students by GPA, academic year 2022&ndash;2023</li>
 </ul>
 
 <h3>Skills</h3>
 <ul>
-<li><b>Languages:</b> Python, C/C++, CUDA, JavaScript, SQL</li>
-<li><b>Frameworks &amp; tools:</b> PyTorch, OpenCV, Pandas, Docker, Kafka</li>
-<li><b>Spoken:</b> Vietnamese, English, Chinese (simplified)</li>
+<li><b>Programming:</b> Python, C/C++, CUDA, Rust, Bash</li>
+<li><b>Frameworks:</b> PyTorch, TensorFlow, Keras</li>
+<li><b>Vision, NLP &amp; RL:</b> OpenCV, Ultralytics, Detectron2, Transformers,
+PEFT, Stable-Baselines3, Gymnasium</li>
+<li><b>Inference &amp; optimisation:</b> ONNX Runtime, TensorRT, Triton,
+bitsandbytes, Numba</li>
+<li><b>MLOps &amp; infrastructure:</b> Docker, Git, AWS, FastAPI, Kafka,
+GitHub Actions, Weights &amp; Biases, Elasticsearch, Faiss</li>
+<li><b>Spoken:</b> Vietnamese (native), English (full professional, IELTS 8.0),
+Chinese (intermediate, HSK 4)</li>
 </ul>
 
 <p>Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
