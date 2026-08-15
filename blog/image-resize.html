@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích về giải thuật resize ảnh &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích về giải thuật resize ảnh</h2>
+<p class="date">2024-03-30 &middot; Image Processing, Interpolation</p>
+
+<p>Xin chào các bạn!</p>
+<p>Trong bài post này, mình sẽ giải thích về một vài phương pháp resize ảnh thông dụng nhất trong lĩnh vực computer vision. Chúng ta thường dùng các thư viện có sẵn trong cv2, pytorch, tensorflow, PIL, ... để resize ảnh nhưng phương pháp nào phù hợp nhất với nhu cầu cũng như phương pháp nào nhanh nhất, việc này chỉ có thể biết được khi chúng ta hiểu được thuật toáncủa nó và đó cũng chính là mục đích của bài post này.</p>
+<figure style="text-align: center">
+     <img src="https://www.techsmith.com/blog/wp-content/uploads/2022/03/resize-image.png">
+     <figcaption style = "text-align: left">Source: <a href="https://www.techsmith.com/blog/how-to-resize-an-image-correctly/">TechSmith</a></figcaption>
+</figure>
+
+<h2 id="1-nearest-neighbour">1. Nearest Neighbour</h2>
+<p>Đây là thuật toán đơn giản nhất trong tất cả các thuật toán resize ảnh và cũng là thuật toán cho tốc độ xử lý nhanh nhất. Về cơ bản, phương pháp Nearest Neighbour sao chép giá trị pixel gần nhất với ảnh cần được resize. Giả dụ, nếu bạn scale một đường thẳng có 4 điểm thành đường thẳng có 9 điểm, thì điểm thứ 3 ở điểm thứ 9 sẽ có giá trị điểm 1 ở đường thẳng mà ban đầu có 4 điểm. Nguyên do là vì nếu bạn scale đường thẳng có 9 điểm về đường thẳng 4 điểm thì ta phải chia cho 2.25 và 3÷2.25 =1.33 làm tròn = 1. Nếu điểm đó nằm ở điểm .5 thì tùy ý các bạn lấy giá trị làm tròn lên hay tròn xuống nhé.<br />
+Một ví dụ trực quan khác là mình muốn scale 1 ảnh có shape là 2x2 lên thành 3x3 bằng phương pháp nearest neighbour.</p>
+<div class="codehilite"><pre><span></span><code>A = [[1, 2],      B = [[?, ?, ?], 
+     [3, 4]]  -&gt;       [?, ?, ?],
+                       [?, ?, ?]] 
+</code></pre></div>
+
+<p>Ở đây, ma trận B ở trục x gấp 3/2  A, và tương tự ở trục y. Vì vậy, nếu muốn tìm giá trị của B thì chỉ cần nhân giá trị vị trí của B với 2/3.<br />
+<span class="math">B(0, 0) = A(round(0 *2/3), round(0 *2/3)) = A(0, 0) = 1</span><br />
+<span class="math">B(1, 1) = A(round(1 *2/3), round(1 *2/3)) = A(0, 0) = 1</span><br />
+<span class="math">B(2, 2) = A(round(2 *2/3), round(2 *2/3)) = A(1, 1) = 4</span><br />
+Vì vậy, ma trận B của chúng ta sẽ giống như vậy:</p>
+<div class="codehilite"><pre><span></span><code>B = [[1, 1, 2], 
+     [1, 1, 2], 
+     [3, 3, 4]]
+</code></pre></div>
+
+<p>Tuy đơn giản để implement và có tốc độ nhanh, tuy nhiên nó có những nhược điểm sau:</p>
+<ul>
+<li>Ảnh bị vỡ, không mượt mà </li>
+<li>Chất lượng ảnh bị giảm sút, đặc biệt khi resize ảnh lên kích thước lớn.</li>
+</ul>
+<h3 id="code">Code</h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">nearest_neighbour</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">new_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    For gray image only because this is a demo of nearest neighbour algorithm</span>
+<span class="sd">    If you want to do 3D version, just simply add another for loop for channel, the rest is the same.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        image (np.ndarray): Original image</span>
+<span class="sd">        new_shape (tuple): target size</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        Resized Image (np.ndarray)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">new_shape</span><span class="p">,</span> <span class="nb">tuple</span> <span class="ow">or</span> <span class="nb">list</span><span class="p">),</span> \
+            <span class="s2">&quot;Data type for new_shape must be tuple or list&quot;</span>
+
+    <span class="n">currHeight</span><span class="p">,</span> <span class="n">currWidth</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">newHeight</span><span class="p">,</span> <span class="n">newWidth</span> <span class="o">=</span> <span class="n">new_shape</span>
+    <span class="n">emptyArr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">newHeight</span><span class="p">,</span> <span class="n">newWidth</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">newHeight</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">newWidth</span><span class="p">):</span>
+            <span class="n">yPositionInOldImage</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">i</span><span class="o">/</span><span class="n">newHeight</span><span class="p">)</span><span class="o">*</span><span class="n">currHeight</span><span class="p">)</span>
+            <span class="n">xPositionInOldImage</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">j</span><span class="o">/</span><span class="n">newWidth</span><span class="p">)</span><span class="o">*</span><span class="n">currWidth</span><span class="p">)</span>
+            <span class="n">emptyArr</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">yPositionInOldImage</span><span class="p">][</span><span class="n">xPositionInOldImage</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">emptyArr</span>
+
+<span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;uint8&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Image after resized: </span><span class="si">{</span><span class="n">nearest_neighbour</span><span class="p">(</span><span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">new_shape</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)})</span><span class="s2">&quot;)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>&gt;Image after resized: [[1 1 2]
+                       [1 1 2]
+                       [3 3 4]]
+</code></pre></div>
+
+<h2 id="2-bilinear-interpolation">2. Bilinear Interpolation</h2>
+<p>Phương pháp này khắc phục nhược điểm ảnh bị vỡ nặng khi scale up ảnh của phương pháp nearest neighbours. Về cơ bản, phương pháp này cũng tìm vị trí x và y của ảnh cũ và tìm 4 điểm lân cận để tìm ra giá trị thay vì chỉ gán vào giá trị có vị trí gần nhất. </p>
+<figure style="text-align: center">
+     <img width=1200 height=400 src="https://archive.ph/vH6jf/728845363a44a7bfc73e8926e8c451b70dceefe5.webp">
+     <figcaption style = "text-align: left">Source: <a href="https://medium.com/@chathuragunasekeraimage-resampling-algorithms-for-pixel-manipulation-bee65dda1488">Image Resampling Algorithms-Chathura Gunasekara</a></figcaption>
+</figure>
+
+<p>Ta có công thức để suy ra giá trị của điểm ảnh trên hình được resize như trên.<br />
+Ví dụ minh họa, ta lấy ma trận A là ma trận ban đầu và ma trận B là ma trận được resized và <span class="math">x'</span> và <span class="math">y'</span> là điểm trên ma trận B mà ta muốn tìm ra giá trị, và <span class="math">x, y</span> là điểm ta suy ra từ vị trí <span class="math">x', y'</span> của ma trận B. Với điểm <span class="math">Pixel(x, y)</span> nằm trong 4 giá trị <span class="math">Pixel(i, j), Pixel(i, j+1), Pixel(i+1, j), Pixel(i+1, j+1)</span> và <span class="math">a</span> là khoảng cách từ <span class="math">x</span> đến <span class="math">i</span>, và <span class="math">b</span> là khoảng cách từ <span class="math">y</span> đến <span class="math">j</span>. Từ đó, ta có công thức để suy ra <span class="math">Pixel(x', y')</span> như sau:<br />
+<span class="math">F(x', y')</span> = <span class="math">(1-a)(1-b)A(i, j)</span> + <span class="math">a(1-b)A(i+1, j)</span> + <span class="math">(1-a)bA(i, j+1)</span> + <span class="math">abA(i+1, j+1)</span></p>
+<p>Chúng ta lấy ví dụ trên để minh họa phương pháp này. Với</p>
+<p><span class="math">x'=1, y'=1</span> ta có điểm <span class="math">x = y =</span> <span class="math">2/3</span> <span class="math">*</span> <span class="math">1</span> <span class="math">= 0.667</span>. Vì vậy, ta suy ra được điểm này là điểm được bao bởi 4 điểm trong ma trận <span class="math">A</span> có vị trí lần lượt như sau <span class="math">(0, 0), (0, 1), (1, 0), (1, 1)</span>. Và <span class="math">a = b = 0.667</span>. Ta tính theo công thức để suy ra giá trị của điểm B(x, y) như sau:  </p>
+<p><span class="math">B(1, 1) = (1-a)*(1-b)*A(0, 0) + (1-a) * b * A(1, 0) + a*(1-b)*A(0, 1) + a*b*A(1, 1)</span></p>
+<p><span class="math">B(1, 1) = (1-0.667)*(1-0.667)*1 + (1-0.667) * 0.667 * 3 + 0.667*(1-0.667)*2 + 0.667*0.667*4 = 2.989</span></p>
+<p>Một ví dụ khác với <span class="math">x'=2, y'=2</span>, ta có điểm <span class="math">x = y =</span> <span class="math">2/3</span> <span class="math">*</span> <span class="math">2</span> <span class="math">= 1.333</span>. Vì vậy, ta suy ra được điểm này là điểm được bao bởi 4 điểm trong ma trận <span class="math">A</span> có vị trí lần lượt như sau <span class="math">(1, 1), (2, 1), (1, 2), (2, 2)</span>. Với điểm nào nằm ngoài điểm biên thì ta thay giá trị điểm đó trùng với điểm biên luôn nha .Và <span class="math">a = b = 0.333</span>. Ta tính theo công thức để suy ra giá trị của điểm B(x, y) như sau:</p>
+<p><span class="math">B(1, 1) = (1-a)*(1-b)*A(1, 1) + (1-a) * b * A(1, 1) + a*(1-b)*A(1, 1) + a*b*A(1, 1)</span></p>
+<p><span class="math">B(1, 1) = (1-0.333)*(1-0.333)*4 + (1-0.333) * 0.333 * 4 + 0.333*(1-0.333)*4 + 0.333*0.333*4 = 4</span></p>
+<p>Và nếu ta tính tương tự như vậy, ta sẽ có kết quả ma trận B như sau:</p>
+<div class="codehilite"><pre><span></span><code>B = [[1.   , 1.666, 2.], 
+     [2.333, 2.989, 3.33], 
+     [3.   , 3.667, 4.]]
+</code></pre></div>
+
+<p>Như có thể thấy thì ma trận B từ phương pháp Bilinear Interpolation cho kết quả nhìn mượt hơn phương pháp Nearest Neighbours. Tuy nhiên phương pháp cũng có nhược điểm là thời gian tính toán lâu hơn so với phương pháp trên.</p>
+<h3 id="code_1">Code</h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bilinear_interpolation</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">new_width</span><span class="p">,</span> <span class="n">new_height</span><span class="p">):</span>
+    <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="n">x_scale_factor</span> <span class="o">=</span> <span class="n">width</span><span class="o">/</span><span class="n">new_width</span>
+    <span class="n">y_scale_factor</span> <span class="o">=</span> <span class="n">height</span><span class="o">/</span><span class="n">new_height</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">new_height</span><span class="p">,</span> <span class="n">new_width</span><span class="p">),</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">new_height</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">new_width</span><span class="p">):</span>
+            <span class="n">src_x</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">x_scale_factor</span>
+            <span class="n">src_y</span> <span class="o">=</span> <span class="n">y</span><span class="o">*</span><span class="n">y_scale_factor</span>
+
+            <span class="n">x1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">src_x</span><span class="p">)</span> <span class="c1"># round down</span>
+            <span class="n">y1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">src_y</span><span class="p">)</span> <span class="c1"># round down</span>
+            <span class="n">x2</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">x1</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">width</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">y2</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">y1</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">height</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">alpha</span> <span class="o">=</span> <span class="n">src_x</span> <span class="o">-</span> <span class="n">x1</span>
+            <span class="n">beta</span> <span class="o">=</span> <span class="n">src_y</span> <span class="o">-</span> <span class="n">y1</span>
+
+            <span class="n">result</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">alpha</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">beta</span><span class="p">)</span><span class="o">*</span><span class="n">image</span><span class="p">[</span><span class="n">y1</span><span class="p">,</span> <span class="n">x1</span><span class="p">]</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">beta</span><span class="p">)</span><span class="o">*</span><span class="n">image</span><span class="p">[</span><span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">]</span> <span class="o">+</span> \
+                            <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">alpha</span><span class="p">)</span><span class="o">*</span><span class="n">beta</span><span class="o">*</span><span class="n">image</span><span class="p">[</span><span class="n">y2</span><span class="p">,</span> <span class="n">x1</span><span class="p">]</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">*</span><span class="n">beta</span><span class="o">*</span><span class="n">image</span><span class="p">[</span><span class="n">y2</span><span class="p">,</span> <span class="n">x2</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+<span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;float32&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Image after resized: </span><span class="si">{</span><span class="n">bilinear_interpolation</span><span class="p">(</span><span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">new_width</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">new_height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Image after resized: [[1.        1.6666666 2.       ]
+                      [2.3333333 3.        3.3333333]
+                      [3.        3.6666667 4.       ]]
+</code></pre></div>
+
+<h2 id="3-bicubic-interpolation">3. Bicubic Interpolation</h2>
+<h2 id="references">References</h2>
+<p>1.</p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích về giải thuật resize ảnh". Le Hoang Viet's Homepage, March 2024. https://mikyx-1.github.io/blog/image-resize.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024imageresize,
+  title   = {Giải thích về giải thuật resize ảnh},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {March},
+  url     = {https://mikyx-1.github.io/blog/image-resize.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

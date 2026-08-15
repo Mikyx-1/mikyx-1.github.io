@@ -14,11 +14,45 @@
 
 <h2>Blog Index</h2>
 
+<input type="search" id="q" class="search" autocomplete="off" spellcheck="false"
+  data-index="blog/search-index.json?v=f1c752c8c902"
+  placeholder="Search 27 posts by title, tag, or section">
+<p id="search-status" class="date" hidden></p>
+<ul id="search-results" hidden></ul>
+
+<div id="browse">
 <ul>
+  <li><a href="/blog/lora.html">LoRA: Low-Rank Adaptation of Large Language Models</a> <span class="date">(2024/11/29)</span></li>
+  <li><a href="/blog/expectation-maximization.html">Expectation-Maximisation Explained</a> <span class="date">(2024/11/27)</span></li>
+  <li><a href="/blog/energy-based-models.html">Energy-based models</a> <span class="date">(2024/11/05)</span></li>
+  <li><a href="/blog/reinforcement-learning-p1.html">Reinforcement Learning - Phần 1</a> <span class="date">(2024/10/03)</span></li>
+  <li><a href="/blog/stable-diffusion.html">Giải thích stable diffusion models</a> <span class="date">(2024/09/29)</span></li>
+  <li><a href="/blog/svm.html">Giải thích và code Support Vector Machine</a> <span class="date">(2024/09/21)</span></li>
+  <li><a href="/blog/pca.html">Giải thích tường tận và code giải thuật Principal Component Analysis</a> <span class="date">(2024/06/30)</span></li>
+  <li><a href="/blog/data-compression.html">Giải thích và code các giải thuật data compression - Phần 1</a> <span class="date">(2024/05/25)</span></li>
   <li><a href="/blog/vision-transformer.html">Vision Transformer (ViT) - Khi Transformer Học Cách Nhìn</a> <span class="date">(2024/05/23)</span></li>
+  <li><a href="/blog/wgan.html">Giải thích và code WGAN</a> <span class="date">(2024/05/18)</span></li>
+  <li><a href="/blog/variational-autoencoder.html">Giải thích và code Variational AutoEncoder</a> <span class="date">(2024/05/18)</span></li>
+  <li><a href="/blog/gan.html">Giải thích và code Generative Adversarial Networks</a> <span class="date">(2024/05/18)</span></li>
+  <li><a href="/blog/naive-bayes.html">Naive Bayes</a> <span class="date">(2024/05/10)</span></li>
+  <li><a href="/blog/fourier-transform.html">Giải thích Fourier Transform</a> <span class="date">(2024/05/09)</span></li>
+  <li><a href="/blog/canny-edge.html">Giải thích và code giải thuật Canny Edge Detection</a> <span class="date">(2024/04/28)</span></li>
+  <li><a href="/blog/image-filters-p2.html">Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 2</a> <span class="date">(2024/04/27)</span></li>
+  <li><a href="/blog/image-filters.html">Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 1</a> <span class="date">(2024/04/08)</span></li>
+  <li><a href="/blog/param-counting.html">Hướng dẫn tính số lượng params trong các mạng Neural Networks - Phần 1</a> <span class="date">(2024/04/05)</span></li>
+  <li><a href="/blog/image-resize.html">Giải thích về giải thuật resize ảnh</a> <span class="date">(2024/03/30)</span></li>
+  <li><a href="/blog/vgg.html">Giải thích và code paper Very Deep Convolutional Networks for Large-Scale Image Recognition</a> <span class="date">(2024/03/30)</span></li>
   <li><a href="/blog/nms-explanation.html">Explain Non-Maximum Suppression and build it from scratch</a> <span class="date">(2024/03/23)</span></li>
+  <li><a href="/blog/guided-filter.html">Giải thích và code paper Guided Image Filtering</a> <span class="date">(2024/03/21)</span></li>
+  <li><a href="/blog/transformer.html">Giải thích và code Transformers</a> <span class="date">(2024/03/21)</span></li>
+  <li><a href="/blog/crawl-youtube-videos.html">Hướng dẫn crawl Youtube Videos tự động với Python</a> <span class="date">(2024/02/23)</span></li>
+  <li><a href="/blog/tf-idf.html">Giải thích và code Term Frequency - Inverse Document Frequency</a> <span class="date">(2017/02/01)</span></li>
+  <li><a href="/blog/hog.html">Giải thích và code thuật toán HOG (Histogram of oriented gradient)</a> <span class="date">(2017/01/01)</span></li>
+  <li><a href="/blog/taylor-series.html">Explain Taylor và Padé series</a> <span class="date">(2017/01/01)</span></li>
 </ul>
+</div>
 
 <p>Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer src="search.js"></script>
 </body>
 </html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn crawl Youtube Videos tự động với Python &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Hướng dẫn crawl Youtube Videos tự động với Python</h2>
+<p class="date">2024-02-23 &middot; Data Collection, Python</p>
+
+<p>Xin chào các bạn!</p>
+<p>Trong bài post lần này mình sẽ giới thiệu một phương pháp để có thể tự động tải các videos/shorts/livestream từ Youtube về để có thêm nguồn data cho mô hình AI/ML.</p>
+<p>Trong lĩnh vực AI/ML, data chiếm 80% công việc của các kĩ sư nên việc biết tận dụng các nền tảng trực tuyến để có thể kiếm thêm nhiều data sẽ rất có ích cho việc xây dựng một mô hình tốt. Có thể kể đến một vài nền tảng nổi tiếng để chúng ta scrape dữ liệu như Instagram, Tiktok, Reddit, Twitter (X), ...</p>
+<p>Chúng ta bắt tay vào thực hành luôn nhé!</p>
+<p><strong>Bước 1</strong>: Install thư viện scrapetube, youtube-dl với pip</p>
+<p>Cho bạn nào chưa biết, pip là một package manager của Python, nó giúp cho việc cài cắm đơn giản hơn rất nhiều so với việc ta tự download và install thủ công.</p>
+<p>Package đầu tiên chúng ta sẽ cài là scrapetube, thư viện này sẽ giúp chúng ta <strong>trích xuất urls</strong> của các videos/shorts một cách tự động mà không cần phải mở một trình duyệt phụ như thư viện Selenium. Vì vậy, việc dùng thư viện này sẽ tiết kiệm khá nhiều thời gian và băng thông mạng của các bạn 😄. Package thứ hai và cũng là package cuối cùng là youtube_dl, thư viện này sẽ giúp chúng ta <strong>tải về các Youtube urls</strong> đã được trích xuất dùng.</p>
+<p>Ta dùng đoạn lệnh sau để có thể cài 2 thư viện này nhé</p>
+<div class="codehilite"><pre><span></span><code>pip install scrapetube youtube_dl
+</code></pre></div>
+
+<p><strong>Bước 2</strong>: Code Python thôii</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Step 1: Import những thư viện cần thiết</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scrapetube</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">download_video</span><span class="p">(</span><span class="n">url</span><span class="p">):</span>
+    <span class="c1"># Đoạn này để setup chất lượng video bạn muốn tải, bạn có thể tham khảo kĩ hơn tại đường link mình để bên dưới nha.</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">([</span><span class="s2">&quot;yt-dlp&quot;</span><span class="p">,</span> <span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="s2">&quot;bestvideo[height&lt;=1080][ext=mp4]&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">])</span>
+
+<span class="n">channel_username</span> <span class="o">=</span> <span class="s2">&quot;schannelvn&quot;</span>  <span class="c1"># Ví dụ về kênh youtube, các bạn có thể lấy kênh nào tùy thích nhé</span>
+
+<span class="c1"># Có 3 options: videos, shorts, streams. Tùy các bạn muốn crawl dạng nào và bỏ vào content type nha, mặc định sẽ là videos.</span>
+<span class="n">urls</span>  <span class="o">=</span> <span class="n">scrapetube</span><span class="o">.</span><span class="n">get_channel</span><span class="p">(</span><span class="n">channel_username</span><span class="o">=</span><span class="n">channel_username</span><span class="p">,</span> <span class="n">content_type</span><span class="o">=</span><span class="s2">&quot;videos&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># Bắt đầu download thôiii</span>
+<span class="k">for</span> <span class="n">url</span> <span class="ow">in</span> <span class="n">urls</span><span class="p">:</span>
+    <span class="n">download_video</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Kết luận</strong>
+Và thế  là chỉ sau 2 bước đơn giản, các bạn có thể crawl hàng tấn videos để có thêm data cho model rồi. Đơn giản phải không nào 😄</p>
+<p>Phần tiếp theo, mình sẽ hướng dẫn các bạn crawl tiktok videos full HD, không watermarks nha, nhớ ghé blog tiếp hen !!</p>
+<h2 id="tải-liệu-tham-khảo">Tải liệu tham khảo</h2>
+<ol>
+<li><a href="https://github.com/dermasmid/scrapetube">Scrapetube-demasmid</a></li>
+<li><a href="https://github.com/ytdl-org/youtube-dl">Youtube-dl</a></li>
+</ol>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Hướng dẫn crawl Youtube Videos tự động với Python". Le Hoang Viet's Homepage, February 2024. https://mikyx-1.github.io/blog/crawl-youtube-videos.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024crawlyoutubevideos,
+  title   = {Hướng dẫn crawl Youtube Videos tự động với Python},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {February},
+  url     = {https://mikyx-1.github.io/blog/crawl-youtube-videos.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>

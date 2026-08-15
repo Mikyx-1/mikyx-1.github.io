@@ -107,6 +107,36 @@ thead, tfoot, tr:nth-child(even) {
 }
 
 /* ---------------------------------------------------------------
+   Blog index: search box, and the year and tag browse lists
+   --------------------------------------------------------------- */
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 1em;
+  padding: 0.5em;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: #f9f9f9;
+}
+
+.search:focus {
+  outline: none;
+  border-color: #999;
+  background: #fff;
+}
+
+/* The heading a result matched on, under the title that did not show it. */
+.hit {
+  font-size: 90%;
+}
+
+#search-results li {
+  margin-bottom: 0.3em;
+}
+
+/* ---------------------------------------------------------------
    Intro: portrait floats right, bio wraps around it.
    --------------------------------------------------------------- */
 

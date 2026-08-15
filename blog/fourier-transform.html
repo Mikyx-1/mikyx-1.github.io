@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích Fourier Transform &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích Fourier Transform</h2>
+<p class="date">2024-05-09 &middot; Signal Processing, Mathematics</p>
+
+<p>Xin chào các bạn, </p>
+<p>Trong bài post này, mình sẽ giới thiệu về chuỗi Fourier và biến đổi Fourier. Đây là một giải thuật có rất nhiều công dụng trong Vật lý, toán học, kỹ thuật viễn thông, kỹ thuật tự động, ... Ngoài ra, biến đổi Fouier có thể có rất rất nhiều ứng dụng ngoài đời thật. Vì nó rất quan trọng và có rất nhiều thứ ta có thể áp dụng nó nên mình sẽ đi sâu vào việc chứng minh nó để có thể  giúp các bạn hiểu được giải thuật này hoạt động như thế nào.</p>
+<p><img alt="Image" src="https://media.licdn.com/dms/image/C5112AQG_liNXZZMl1A/article-cover_image-shrink_423_752/0/1577030802664?e=1720656000&amp;v=beta&amp;t=C9L_PmbXvIobSYPQEPW_WSH-hEsAZQx2Lez3-qciGwE" /></p>
+<!-- https://www.linkedin.com/pulse/fast-fourier-transform-santosh-maharana/ -->
+
+<h2 id="1-đặt-vấn-đề">1. Đặt vấn đề</h2>
+<p>Trước khi đi vào phần chứng minh, mình muốn dành một phần nhỏ để nói về ứng dụng của giải thuật Fourier.</p>
+<p><img alt="Image" src="https://www.ksmotor.tw/uploads/editor/files/quality-2-1.jpg" /></p>
+<!-- https://www.ksmotor.tw/en/quality_control -->
+
+<p>Giả sử trong khâu kiểm định chất lượng motor trước khi xuất xưởng, chúng ta phải test thử motor chạy tốt hay không tốt để giao tới khách hàng. Việc này có thể test bằng việc cho motor chạy khoảng vài chục ngàn vòng và nghe tiếng phát ra của nó. Nếu nó chạy đều và ổn định thì nó là motor tốt còn trong lúc test nó rít lên hay phát ra tiếng kêu to hoặc nhỏ hơn bình thường, ta cần loại những sản phầm này. Những tiếng rít của motor có tần số rất cao và ta muốn phát hiện những tiếng rít này một cách tự động. Tuy nhiên, tín hiệu ta thu về có đồ thị như ở hình dưới, chỉ có đơn điệu đồ thị biên độ và thời gian.</p>
+<p><img alt="Image" src="https://www.researchgate.net/profile/Rahul-Chaurasiya/publication/268391294/figure/fig1/AS:614119958917140@1523429016448/Voice-signal-for-the-word-one-The-1-second-duration-of-the-time-axis-is-divided-into.png" /></p>
+<p>Chuỗi Fourier sẽ giúp chúng ta tách sóng này ra thành các thành phần sin và cos với nhiều tần số khác nhau và biến đổi Fourier sẽ cho chúng ta biết đích xác có nững dải tần số nào trong tín hiệu này. Nhờ những tín hiệu này, ta có thể dễ dàng phân loại được chất lượng motor một cách tự động. </p>
+<h2 id="1-chuỗi-fourier-fourier-series">1. Chuỗi Fourier (Fourier Series)</h2>
+<p>Chuỗi Fourier là tổng hợp của các tín hiệu sin và cos để có thể tạo nên tín hiệu gốc. Điều kiện để có thể phân tách được thành chuối Fourier là nó phải có tính tuần hoàn. </p>
+<div class="math math-display">f(x + T) = f(x)</div>
+<p>Và nó có công thức như sau:</p>
+<div class="math math-display">f(x) = \sum_{n=0}^{\infty}a_ncos(\frac{n\pi x}{L}) + \sum_{n=0}^{\infty}b_nsin(\frac{n\pi x}{L})  \text{ } (1)</div>
+<p>Vì <span class="math">cos(0) = 1</span> và <span class="math">sin(0) = 0</span> nên ta có thể rút <span class="math">(1)</span> thành như sau:</p>
+<div class="math math-display">&lt;=&gt; f(x) = a_0 +  \sum_{n=1}^{\infty}a_ncos(\frac{n\pi x}{L}) + \sum_{n=1}^{\infty}b_nsin(\frac{n\pi x}{L})  \text{ } (2)</div>
+<p>Đặt  <span class="math">\theta_n = \frac{n\pi}{L}</span> và áp vào <span class="math">(2)</span> ta được:</p>
+<div class="math math-display">f(x) = a_0 +  \sum_{n=1}^{\infty}a_ncos(\theta_n x) + \sum_{n=1}^{\infty}b_nsin(\theta_n x)  \text{ } (3)</div>
+<p>Theo Euler, ta có: </p>
+<div class="math math-display">cos(\theta) = \frac{e^{j \theta} + e^{-j \theta}}{2}</div>
+<div class="math math-display">sin(\theta) = \frac{e^{j \theta} - e^{-j \theta}}{2j}</div>
+<p>Áp 2 công thức trên vào (3) ta được:</p>
+<div class="math math-display">&lt;=&gt;f(x) = a_0 + \sum_{n = 1}^{\infty}\frac{a_n}{2} (e^{j \theta_n x} + e^{-j \theta_n x}) + \sum_{n = 1}^{\infty}\frac{b_n}{2j} (e^{j \theta_n x} - e^{-j \theta_n x}) \text{ } (4)</div>
+<p>Khai triển từ (4), ta được:</p>
+<div class="math math-display">&lt;=&gt;f(x) = a_0 + \sum_{n = 1}^{\infty}(\frac{a_n}{2} + \frac{b_n}{2j})e^{j \theta_n x} + \sum_{n = 1}^{\infty}(\frac{a_n}{2} - \frac{b_n}{2j})e^{-j \theta_n x} \text{ } (5)</div>
+<p>Triển khai tiếp từ (5), ta được:</p>
+<div class="math math-display">&lt;=&gt; f(x) = a_0 + \sum_{n = 1}^{\infty}(\frac{a_n - j b_n}{2})e^{j \theta_n x} + \sum_{n = 1}^{\infty}(\frac{a_n + j b_n}{2})e^{-j \theta_n x} \text{ } (6)</div>
+<p>Ta biến đổi tiếp từ (6) như sau:</p>
+<p>Đặt</p>
+<div class="math math-display">C_{n-} = \frac{a_n - j b_n}{2}</div>
+<div class="math math-display">C_{n+} = \frac{a_n + j b_n}{2}</div>
+<div class="math math-display">C_0 = a_0</div>
+<div class="math math-display">f(x) = C_0 + \sum_{n = -1}^{-\infty}C_{n-}e^{-j \theta_n x} + \sum_{n = 1}^{\infty}C_{n+}e^{-j \theta_n x} \text{ } (6)</div>
+<p>Và ta có được công thức tổng quát của chuỗi Fourier:</p>
+<div class="math math-display">&lt;=&gt; f(x) = \sum_{n = - \infty}^{\infty} C_n e^{-j \theta_n x} \text{ } (7)</div>
+<p>Sau khi có được công thức tổng quát, ta cần tìm ra các hệ số  <span class="math">a_n, b_n, c_n</span>. Và ý tưởng tìm ra các hệ số này là tính trực giao (Orthogonality). </p>
+<p>Ta có mệnh đề trực giao đối với một cặp hàm số điều hòa như sau:</p>
+<div class="math math-display">\int_{-\pi}^{\pi} cos(nx)cos(kx)dx = 0 \text{ } (n \neq k)</div>
+<div class="math math-display">\int_{-\pi}^{\pi} sin(nx)cos(kx)dx = 0</div>
+<p><strong>Note</strong>: Mình sẽ chứng minh mệnh đề này ở sau cùng, bây giờ hãy tập trung vào chuỗi Fourier trước.</p>
+<p>Bây giờ, ta hãy nhân cả 2 vế của (1) với cos(x), ta được:</p>
+<div class="math math-display">\int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = \int_{-\pi}^{\pi}(\sum_{n=0}^{\infty}a_ncos(\theta_n x) + \sum_{n=0}^{\infty}b_nsin(\theta_n x))cos(\theta x) dx  \text{ } (8)</div>
+<p>Khai triển tiếp, ta được:</p>
+<div class="math math-display">&lt;=&gt;\int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = \int_{-\pi}^{\pi}(\sum_{n=0}^{\infty}a_ncos(\theta_n x) + \sum_{n=0}^{\infty}b_nsin(\theta_n x))cos(\theta_n x) dx  \text{ } (8)</div>
+<div class="math math-display">&lt;=&gt;\int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = \int_{-\pi}^{\pi}(\sum_{n=0}^{\infty}a_ncos(\theta_n x) + \sum_{n=0}^{\infty}b_nsin(\theta_n x))cos(\theta_n x) dx  \text{ } (9)</div>
+<div class="math math-display">&lt;=&gt;\int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = \int_{-\pi}^{\pi} a_ncos(\theta_k x)cos(\theta_n x) dx  \text{ } (10)</div>
+<div class="math math-display">&lt;=&gt;\int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = a_n \pi \text{ } (11)</div>
+<div class="math math-display">=&gt; a_n = \frac{1}{\pi} \int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx \text{ } (12)</div>
+<div class="math math-display">=&gt; a_0 = \frac{1}{2\pi} \int_{-\pi}^{\pi} f(x)dx \text{ = average of f(x) } (13)</div>
+<p>Tương tự, ta có <span class="math">b_n</span> được tính như sau:</p>
+<div class="math math-display">=&gt; b_n = \frac{1}{\pi} \int_{-\pi}^{\pi} f(x)sin(\theta_n x)dx \text{ } (14)</div>
+<p>Và sau khi có giá trị <span class="math">a_n \text{ và }  b_n</span>, ta có thể phân tích bất kì dạng sóng nào thành một chuỗi sin và cos.</p>
+<p>Ví dụ tính toán chuỗi Fourier:</p>
+<p>Phân tích hàm dirac như hình dưới thành một chuỗi các sóng sin và cos</p>
+<p><img alt="Image" src="https://wikiwandv2-19431.kxcdn.com/_next/image?url=https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Dirac_distribution_PDF.svg/langvi-1500px-Dirac_distribution_PDF.svg.png&amp;w=1200&amp;q=50" /></p>
+<p>Như ở hình trên, có thể thấy rằng hàm dirac là hàm chẵn do <span class="math">f(x) = f(-x)</span>, vậy nên sẽ không tồn tại các các hàm <span class="math">sin</span>. Vì vậy, hàm dirac sẽ chỉ bao gồm các dạng sóng <span class="math">cos</span>.</p>
+<p>Dựa vào quan sát trên, ta khai triển như sau:</p>
+<div class="math math-display">f(x) = a_0 +  \sum_{n=1}^{\infty}a_ncos(\theta_n x)</div>
+<p>Như đã chứng minh ở trên, <span class="math">a_0</span> được tính bằng công thức:</p>
+<div class="math math-display">a_0 = \frac{1}{2\pi} \int_{-\pi}^{\pi} f(x)dx = \frac{1}{2 \pi}</div>
+<div class="math math-display">a_n = \frac{1}{\pi} \int_{-\pi}^{\pi} f(x)cos(\theta_n x)dx = \frac{1}{\pi}</div>
+<p>Biết được <span class="math">a_n</span> và <span class="math">a_0</span>, ta có thể xấp xỉ hàm dirac:</p>
+<div class="math math-display">\delta(x) = \frac{1}{2\pi} + \frac{1}{\pi}(cos(\frac{1}{2}x) + cos(x) + cos(\frac{3}{2}x) + cos(2x) + ...)</div>
+<p>Ta được kết quả như sau nếu hiển thị nó matplotlib để trực quan hóa</p>
+<p><img alt="Alt text" src="../images/posts/fourier/fourier_dirac_example.png" /></p>
+<p>Sau khi phân tích một tín hiệu thu được thành một chuỗi tín hiệu sin và cos, giờ ta muốn tìm xem trong chuỗi đó có những loại tần số nào? Fourier Transform sẽ cho chúng ta biết điều này.</p>
+<h2 id="2-fourier-transform">2. Fourier Transform</h2>
+<p>Fourier Transform chỉ đơn thuần là một phép biến đổi được triển khai từ chuỗi Fourier, nếu đã nắm chắc lý thuyết về chuỗi Fourier thì phần này sẽ rất dễ dàng với các bạn.</p>
+<p>Ta bắt đầu từ phương trình (7) ở trên, chuỗi Fourier được biểu diễn gọn gàng với công thức như sau:</p>
+<div class="math math-display">f(x) = \sum_{n = - \infty}^{\infty} C_n e^{-j \theta_n x}</div>
+<p>Diễn giải bằng lời thì mỗi dạng sóng bất kì sẽ được phân tách thành một chuỗi tín hiệu với tần số góc <span class="math">\theta_n</span>. <span class="math">C_n</span> được tạo thành từ số phức (như chứng minh ở trên), vì vậy hệ số này sẽ bao gồm biên độ (Magnitude) và pha (phase) của mỗi tín hiệu <span class="math">\theta_n</span>. Và chỉ cần tìm ra hệ số <span class="math">C_n</span> này thì ta có thể dễ dàng tìm ra trong dạng sóng này có những biên độ và pha nào.</p>
+<p>Theo như công thức thì ta có 3 trường hợp cho <span class="math">C_n</span>:</p>
+<div class="math math-display">C_{n-} = \frac{a_n - j b_n}{2}</div>
+<div class="math math-display">C_{n+} = \frac{a_n + j b_n}{2}</div>
+<div class="math math-display">C_0 = a_0</div>
+<p>Ở biến đổi Fourier, ta chỉ quan tâm đến biên độ và tần số, vì vậy việc <span class="math">C_{n-}</span> hay <span class="math">C_{n+}</span> sẽ không ảnh hưởng tới kết quả cuối cùng bởi vì kết quả đã được scale về cùng một tiêu chuẩn. </p>
+<p>Ở bài này, mình sẽ chọn <span class="math">C_{n-} = \frac{a_n - j b_n}{2} \text{ } (13)</span></p>
+<p>Ta thay (12) và (14) vào (13), được:</p>
+<div class="math math-display">&lt;=&gt; a_n - jb_n = \frac{1}{2 \pi} \int_{-\pi}^{\pi} f(x)(cos(\theta_nx) - jsin(\theta_nx))dx</div>
+<p>Áp dụng định lý Euler, ta được dạng tổng quát và quen thuộc sau:</p>
+<div class="math math-display">&lt;=&gt; C_n =  a_n - jb_n = \frac{1}{2 \pi} \int_{-L}^{L} f(x)e^{-j \theta_nx}dx</div>
+<p><strong>Note</strong>: Phần hệ số <span class="math">\frac{1}{2 \pi}</span> có thể được lược đi, và thông thường thì mình thấy người ta lược đi cho gọn.</p>
+<h2 id="3-phần-kết">3. Phần kết</h2>
+<p>Ở bài này, mình đã giới thiệu cho các bạn chuỗi Fourier, biến đổi Fourier và chứng minh chuỗi này bằng toán học. Thuật toán này làm được cực kì nhiều thứ hay ho, những ứng dụng của nó trong xử lý ảnh và deep learning sẽ được mình tổng hợp và trình bày trong các bài post tới. Giờ thì các bạn có thể phân tách bất kì hàm số nào thành chuỗi Fourier được rồi, chúc các bạn vui vẻ với nó nhé. </p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://www.youtube.com/watch?v=Q99ZPGnUBAQ&amp;list=WL&amp;index=71&amp;t=533s">Deriving the Fourier Transform - BK Teach</a></p>
+<p>2. <a href="https://www.youtube.com/watch?v=vA9dfINW4Rg&amp;list=WL&amp;index=76">Fourier Series - MIT OpenCourseWare</a></p>
+<p>3. <a href="https://en.wikipedia.org/wiki/Fourier_transform">Fourier Transform - Wikipedia</a></p>
+<p>4. <a href="https://www.tutorialspoint.com/difference-between-fourier-series-and-fourier-transform">Difference between Fourier Series and Fourier Transform</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích Fourier Transform". Le Hoang Viet's Homepage, May 2024. https://mikyx-1.github.io/blog/fourier-transform.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024fouriertransform,
+  title   = {Giải thích Fourier Transform},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {May},
+  url     = {https://mikyx-1.github.io/blog/fourier-transform.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

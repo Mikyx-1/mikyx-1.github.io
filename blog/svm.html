@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code Support Vector Machine &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code Support Vector Machine</h2>
+<p class="date">2024-09-21 &middot; Machine Learning, Classification</p>
+
+<p>Xin chào các bạn,</p>
+<p>Trong bài post này, mình sẽ giải thích về toán học và code Support Vector Machine. </p>
+<figure style="text-align: center">
+<img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjMrv1SeApEuCzVz50g69nD3CdL9yGTJP-J_54Jerv6TpJSBbdF5NJTgtioR4W0cgzWlcseldCQ-5XsoftxV-l_EleSpj4c8qTdyNiMZ8WTpuVYZnwdRDj9wNJiLroRylC-yxgJ6Nm1mhrTkCDd0lf--5k2PDnYZiShx59LP382PksRqqvXkm4KGQgwLg/w636-h358/20220724_220727_0000.png" alt="">
+</figure>
+
+<h2 id="1-giới-thiệu">1. Giới thiệu</h2>
+<p>Support Vector Machine là một giải thuật phân loại có giám sát (supervised learning) được đề xuất bởi nhà khoa học người Liên Xô Vladimir Vapnik và các cộng sự. Đây là một giải thuật cực kì thú vị cho các bạn mới học ML/AI vì cách diễn giải và chứng minh toán học không quá phức tạp nhưng cực kì hiệu quả. </p>
+<p>Ban đầu, giải thuật này chỉ được sử dụng cho việc phân loại 2 classes (binary classification). Tuy nhiên, sau đó cộng đồng AI/ML đã cải biến để có thể dùng nó cho multiple-class classification, regression. </p>
+<h2 id="2-giải-thích-toán-học">2. Giải thích toán học</h2>
+<p>Các lý thuyết về của SVM bao quanh các định lý cơ bản của toán học như vector, matrix, tối ưu Larange.</p>
+<p>Primal form của SVM có dạng như sau: </p>
+<div class="math math-display">\min_{w, b} \frac{1}{2}||w|| + C \sum_{1}^{n}{\xi_i}</div>
+<div class="math math-display">\text{s.t. } y_i(w^T\phi(x_i) + b) \ge 1 - \xi_i, \forall i</div>
+<div class="math math-display">\xi_i \ge 0, \forall i</div>
+<p>Tới đây, nếu không vướng phải hàm <span class="math">\phi</span> thì ta có thể dùng các thư viện tối ưu để tìm ra được <span class="math">w</span> và <span class="math">b</span>. Hàm <span class="math">\phi</span> là một hàm mà sẽ chiếu dữ liệu gốc lên một không gian mới (có thể nhiều chiều hơn hoặc ít chiều hơn), tuy nhiên chúng ta không biết hàm này và sẽ phải chọn thủ công để tìm được hàm tối ưu nhất cho từng task. </p>
+<p>Có một cách mà có thể bỏ qua được việc biết hàm <span class="math">\phi</span> là gì, đó là <strong>biến đổi hàm tối ưu này sang dạng dual và dùng phương pháp kernelisation</strong> (mình sẽ nói rõ hơn ở phần áp dụng nó vào). </p>
+<p>Bây giờ, chúng ta sẽ từng bước biến đổi từ bài toán primal sang dual. Ở bài toán primal, ta sẽ áp dụng phương pháp Lagrange và được như sau: </p>
+<div class="math math-display">L(w, b, [{\xi_i}], [\alpha_i], [\lambda_i]) = \frac{1}{2}||w|| + \sum_{i=1}^{n}\alpha_i(1 - \xi_i - y_i(w^T\phi(x_i) + b)) + \sum_{i=1}^{n}\lambda_i \xi_i</div>
+<p>Đây là hàm Lagrange, hàm này biến đổi từ một mớ constraints thành một hàm unconstraints. Để tìm được điểm tối ưu, chúng ta phải giải phương trình sau.</p>
+<div class="math math-display">L^*(w, b, [{\xi_i}], [\alpha_i], [\lambda_i]) = \inf_{w} \sup_{[\alpha_i], [\lambda_i]}\frac{1}{2}||w|| + \sum_{i=1}^{n}\alpha_i(1 - \xi_i - y_i(w^T\phi(x_i) + b)) + \sum_{i=1}^{n}\lambda_i \xi_i</div>
+<p>Bình thường, để có thể biến đổi từ dạng primal sang dual mà không làm biến đổi kết quả cuối cùng của bài toán, chúng ta phải chứng minh chúng đối ngẫu (strong duality). Tuy nhiên, bài toán này đã được chứng minh là đối ngẫu nếu primal có nghiệm (chắc chắn primal của bài toán này có nghiệm), và mình sẽ chứng minh nó đối ngẫu ở các bài riêng. Tạm thời, chúng ta hãy chấp nhận strong duality và tiếp tục biến đổi. </p>
+<p>Với strong duality, ta có hệ quả như sau:</p>
+<div class="math math-display">L^* = \inf_{w, b, [\xi_i]} \sup_{[\alpha_i], [\lambda_i]} = \sup_{[\alpha_i], [\lambda_i]} \inf_{w, b, [\xi_i]}</div>
+<p>Áp dụng hệ quả của strong duality, ta được phương trình sau</p>
+<div class="math math-display">L^*(w, b, [{\xi_i}], [\alpha_i], [\lambda_i]) = \sup_{[\alpha_i], [\lambda_i]} \inf_{w, b, [\xi_i]} \frac{1}{2}||w|| + \sum_{i=1}^{n}\alpha_i(1 - \xi_i - y_i(w^T\phi(x_i) + b)) + \sum_{i=1}^{n}\lambda_i \xi_i</div>
+<p>Với phương trình trên, ta sẽ tìm <span class="math">w</span> và <span class="math">b</span> sao cho hàm Lagrange có giá trị nhỏ nhất. Ta dùng đạo hàm để tìm giá trị cực tiểu. </p>
+<div class="math math-display">\frac{\partial L}{\partial w} = 0 &lt;=&gt; w - \sum_{i=1}^{n}\alpha_n y_n \phi(x_n) = 0 &lt;=&gt;  w = \sum_{i=1}^{n}\alpha_n y_n \phi(x_n)</div>
+<div class="math math-display">\frac{\partial L}{\partial b} = 0 &lt;=&gt; \sum_{i=1}^{n}\alpha_n y_n</div>
+<div class="math math-display">\frac{\partial L}{\partial \xi} = 0 &lt;=&gt; C - \bold{\alpha} - \bold{\lambda} = 0</div>
+<p>Áp dụng các phương trình trên vào hàm Lagrange, ta được: </p>
+<div class="math math-display">L([\alpha_i], [\lambda_i]) = \sum_{i=1}^{n} \alpha_i + \frac{1}{2} \sum_{i=1}^{m}\sum_{i=1}^{n} \alpha_m \alpha_n y_m y_n \phi^T(x_m)\phi(x_n)</div>
+<div class="math math-display">\text{s.t. } \alpha_i, \lambda_i \ge 0</div>
+<div class="math math-display">\sum_{i=1}^{n}\alpha_i y_i = 0</div>
+<div class="math math-display">C - \alpha - \lambda = 0</div>
+<p>Như quan sát, trong làm Lagrange bây giờ không còn tồn tại <span class="math">\lambda</span> nhưng <span class="math">\lambda</span> vẫn phải lớn hơn 0 do ràng buộc Lagrange. Ta sẽ dùng nó để biến đổi tiếp như sau: </p>
+<div class="math math-display">L([\alpha_i], [\lambda_i]) = \sum_{i=1}^{n} \alpha_i + \frac{1}{2} \sum_{i=1}^{m}\sum_{i=1}^{n} \alpha_m \alpha_n y_m y_n \phi^T(x_m)\phi(x_n)</div>
+<div class="math math-display">\text{s.t. } \alpha_i \ge 0</div>
+<div class="math math-display">\sum_{i=1}^{n}\alpha_i y_i = 0</div>
+<div class="math math-display">C - \alpha \ge 0</div>
+<p>Và cuối cùng, ta cần phải giải phương trình với các constraints như sau để có thể tìm ra nghiệm của bài toán. </p>
+<div class="math math-display">L^*([\alpha_i], [\lambda_i]) = \sup_{[\alpha_i]} \sum_{i=1}^{n} \alpha_i + \frac{1}{2} \sum_{i=1}^{m}\sum_{i=1}^{n} \alpha_m \alpha_n y_m y_n \phi^T(x_m)\phi(x_n)</div>
+<div class="math math-display">\text{s.t. } 0 \le \alpha_i \le C</div>
+<div class="math math-display">\sum_{i=1}^{n}\alpha_i y_i = 0</div>
+<p>Nhìn có vẻ phức tạp, nhưng thực chất nó có thể được biểu diễn như bài toán <strong>quadratic convex optimisation</strong> và có thể được giải dễ dàng. Tuy nhiên, chúng ta vẫn còn bị cấn ở phần hàm <span class="math">\phi</span> và mục đích biến đổi nãy giờ chỉ để bypass phần này. Để có thể thực hiện việc này, các nhà khoa học đã đề xuất một phương pháp được gọi là <strong>kernelisation trick</strong>. </p>
+<p>Giả sử, hàm <span class="math">\phi \in \mathbb{R}^2 \to \mathbb{R}^3</span> có dạng như sau: </p>
+<div class="math math-display">\phi: x \to \phi(x) = \begin{bmatrix} x_1^2 \\ \sqrt{2}x_1x_2 \\ x_2^2 \end{bmatrix}</div>
+<div class="math math-display">\phi^T(x_m) \cdot \phi(x_n) = \begin{bmatrix} x_{m1}^2 \\ \sqrt{2}x_{m1}x_{m2} \\ x_{m2}^2 \end{bmatrix}^T \cdot \begin{bmatrix} x_{n1}^2 \\ \sqrt{2}x_{n1}x_{n2} \\ x_{n2}^2 \end{bmatrix}</div>
+<div class="math math-display">&lt;=&gt;  \phi^T(x_m) \cdot \phi(x_n) = x_{m1}^2x_{n1}^2 + 2x_{m1}x_{m2}x_{n1}x_{n2} + x_{m2}^2x_{n2}^2</div>
+<div class="math math-display">&lt;=&gt; \phi^T(x_m) \cdot \phi(x_n) = (x_{m1}x_{n1} + x_{m2}x_{n2})^2 = (x_m^T \cdot x_n)^2</div>
+<p>Như các bạn thấy, sau khi dot 2 vectors lại thì ta được một kết quả là dot của 2 vectors gốc không liên quan gì đến <span class="math">\phi</span> mà phụ thuộc vào kết quả của một <strong>cách kết hợp của 2 dữ liệu ở chiều gốc</strong> và người ta đặt tên cho nó là kernelisation. </p>
+<p>Có rất nhiều loại kernel, một vài loại phổ biến là: </p>
+<p><span class="math math-display">\text{Polynomial: } k(x_m, x_n) = (x_m^Tx_n + r)^d</span>  </p>
+<p><span class="math math-display">\text{Linear: } k(x_m, x_n) = x_m^Tx_n</span>  </p>
+<p><span class="math math-display">\text{Gaussian: } k(x_m, x_n) = e^{\frac{||x_m - x_n||^2}{2\sigma^2}}</span>  </p>
+<p><span class="math math-display">\text{Laplace: } k(x_m, x_n) = e^{-\alpha||x_m - x_n||}</span>  </p>
+<p>Nhưng mình thấy dùng phổ biến nhất có Gaussian. Việc kernel tốt và phù hợp với bài toán sẽ là quyết định của người sử dụng. </p>
+<p>Áp dụng kernelisation vào phương trình Larange ở trên, ta được: </p>
+<div class="math math-display">L^*([\alpha_i], [\lambda_i]) = \sup_{[\alpha_i]} \sum_{i=1}^{n} \alpha_i + \frac{1}{2} \sum_{i=1}^{m}\sum_{i=1}^{n} \alpha_m \alpha_n y_m y_n k(x_m, x_n)</div>
+<div class="math math-display">\text{s.t. } 0 \le \alpha_i \le C</div>
+<div class="math math-display">\sum_{i=1}^{n}\alpha_i y_i = 0</div>
+<p>Sau khi dùng quadratic programming tìm ra nghiệm tối ưu cho phương trình trên, ta sẽ được <span class="math">\alpha^*</span> và sẽ dùng nó để tìm <span class="math">w</span> và <span class="math">b</span>. </p>
+<p>Áp dụng phương trình từ đạo hàm Larange lúc nãy, ta có <span class="math">w</span> và <span class="math">b</span> được tính như sau: </p>
+<div class="math math-display">w^* = \sum_{i=1}^{n}\alpha_i^* y_n \phi(x_n)</div>
+<p>Dựa vào phương trình trên, ta quan sát thấy <span class="math">w^*</span> chỉ bị ảnh hưởng khi <span class="math">\alpha_i &gt; 0</span> và sẽ không bị ảnh hưởng khi <span class="math">\alpha_i = 0</span>. Ta gọi những training data <span class="math">x_i</span> có <span class="math">\alpha &gt; 0</span> là <strong>support vectors</strong> do chỉ các training data này mới có tác động. </p>
+<p>Nhớ lại ở đầu mục, chúng ta đã set điều kiện <span class="math">w^T\phi(x_{sv}) + b = y_i = \pm 1</span>. Vì vậy sau khi biết <span class="math">w</span> và biết được các support vectors, ta sẽ áp dụng để tìm <span class="math">b</span>. </p>
+<div class="math math-display">b = y_i - {w^*}^T \phi(x_{SV}) = y_i - \sum_{i=1}^{n}\alpha_i^* y_n k(x_n, x_{SV})</div>
+<p>Chỉ cần chọn một support vector là chúng ta có thể tìm ra <span class="math">b</span>. </p>
+<p>Và sau khi tìm ra <span class="math">w</span> và <span class="math">b</span>, chúng ta đã tìm ra được hyperplane tối ưu nhất để phân tách được 2 class.</p>
+<h2 id="3-code-svm">3. Code SVM</h2>
+<p>Ở phần này, mình sẽ code SVM chỉ dùng các thư viện numpy (tính toán ma trận), cvxopt (Tối ưu), matplotlib (visualise)</p>
+<ul>
+<li><strong>Bước 1: Import các thư viện cần thiết</strong></li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cvxopt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 2: Viết các kernelisation functions</strong></li>
+</ul>
+<p>Có nhiều hàm kernelisation. Tuy nhiên, trong nội dung bài post, mình sẽ chỉ dùng gaussian (hay còn được gọi là RBF) và đây cũng là kernel phổ biến nhất khi SVM được dùng. </p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">linear</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">polynomial</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">T</span><span class="p">))</span><span class="o">**</span><span class="n">p</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">gaussian</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="o">-</span><span class="n">z</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">sigma</span><span class="o">**</span><span class="mi">2</span><span class="p">)))</span>
+</code></pre></div>
+
+<ul>
+<li>**Bước 3: Viết code training, predict **</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SVM</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel</span><span class="o">=</span><span class="n">gaussian</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernel</span> <span class="o">=</span> <span class="n">kernel</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">C</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">X</span>
+        <span class="n">m</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="c1"># Calculate Kernel</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="n">m</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+
+        <span class="c1"># Solve with cvxopt final QP needs to be reformulated</span>
+        <span class="c1"># to match the input form for cvxopt.solvers.qp</span>
+        <span class="n">P</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">K</span><span class="p">)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+        <span class="n">G</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">m</span><span class="p">))))</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">m</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span><span class="p">)))</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">m</span><span class="p">),</span> <span class="s2">&quot;d&quot;</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">cvxopt</span><span class="o">.</span><span class="n">solvers</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;show_progress&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">sol</span> <span class="o">=</span> <span class="n">cvxopt</span><span class="o">.</span><span class="n">solvers</span><span class="o">.</span><span class="n">qp</span><span class="p">(</span><span class="n">P</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">alphas</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">])</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="n">y_predict</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="n">sv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">alphas</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">y_predict</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">alphas</span><span class="p">[</span><span class="n">sv</span><span class="p">]</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">[</span><span class="n">sv</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">sv</span><span class="p">])[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">y_predict</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alphas</span><span class="p">):</span>
+        <span class="n">threshold</span> <span class="o">=</span> <span class="mf">1e-5</span>
+
+        <span class="n">sv</span> <span class="o">=</span> <span class="p">((</span><span class="n">alphas</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">alphas</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span><span class="p">))</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">sv</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">alphas</span><span class="p">[</span><span class="n">sv</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">[</span><span class="n">sv</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">[</span><span class="n">sv</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+            <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">alphas</span><span class="p">[</span><span class="n">sv</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">[</span><span class="n">sv</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">K</span><span class="p">[</span><span class="n">sv</span><span class="p">,</span> <span class="n">sv</span><span class="p">][:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sv</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 4: Viết các hàm helpers</strong>:</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_dataset</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">D</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span> <span class="o">*</span> <span class="n">K</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>  <span class="c1"># data matrix (each row = single example)</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span> <span class="o">*</span> <span class="n">K</span><span class="p">)</span>  <span class="c1"># class labels</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+        <span class="n">ix</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span> <span class="o">*</span> <span class="n">j</span><span class="p">,</span> <span class="n">N</span> <span class="o">*</span> <span class="p">(</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>  <span class="c1"># radius</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">j</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span> <span class="p">(</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.2</span>  <span class="c1"># theta</span>
+        <span class="n">X</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">c_</span><span class="p">[</span><span class="n">r</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="n">r</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">t</span><span class="p">)]</span>
+        <span class="n">y</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">j</span>
+
+    <span class="c1"># lets visualize the data:</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">plt</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">Spectral</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="n">y</span><span class="p">[</span><span class="n">y</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">plot_contour</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">svm</span><span class="p">):</span>
+    <span class="c1"># plot the resulting classifier</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="mf">0.01</span>
+    <span class="n">x_min</span><span class="p">,</span> <span class="n">x_max</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">y_min</span><span class="p">,</span> <span class="n">y_max</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="n">xx</span><span class="p">,</span> <span class="n">yy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x_min</span><span class="p">,</span> <span class="n">x_max</span><span class="p">,</span> <span class="n">h</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y_min</span><span class="p">,</span> <span class="n">y_max</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span>
+
+    <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">c_</span><span class="p">[</span><span class="n">xx</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">yy</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
+
+    <span class="n">Z</span> <span class="o">=</span> <span class="n">svm</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+    <span class="n">Z</span> <span class="o">=</span> <span class="n">Z</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">xx</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">xx</span><span class="p">,</span> <span class="n">yy</span><span class="p">,</span> <span class="n">Z</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">plt</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">Spectral</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+
+    <span class="c1"># plt the points</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">plt</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">Spectral</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 4: Tạo data giả và train SVM để đánh giá</strong></li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">create_dataset</span><span class="p">(</span><span class="n">N</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+<span class="n">permuted_idxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">permuted_idxes</span><span class="p">]</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">permuted_idxes</span><span class="p">]</span>
+
+<span class="n">val_split</span> <span class="o">=</span> <span class="mi">50</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:</span><span class="n">val_split</span><span class="p">],</span> <span class="n">y</span><span class="p">[:</span><span class="n">val_split</span><span class="p">]</span>
+<span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">val_split</span><span class="p">:],</span> <span class="n">y</span><span class="p">[</span><span class="n">val_split</span><span class="p">:]</span> 
+
+<span class="n">svm</span> <span class="o">=</span> <span class="n">SVM</span><span class="p">(</span><span class="n">kernel</span><span class="o">=</span><span class="n">gaussian</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">svm</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">)</span>
+<span class="n">y_pred</span> <span class="o">=</span> <span class="n">svm</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Accuracy: </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">Y_val</span><span class="o">==</span><span class="n">y_pred</span><span class="p">)</span><span class="o">/</span><span class="n">Y_val</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Accuracy:<span class="w"> </span><span class="m">0</span>.9384615384615385
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.svm</span><span class="w"> </span><span class="kn">import</span> <span class="n">SVC</span>
+<span class="n">clf</span> <span class="o">=</span> <span class="n">SVC</span><span class="p">()</span>
+<span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">)</span>
+<span class="n">pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Accuracy: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pred</span><span class="p">[</span><span class="n">pred</span><span class="o">==</span><span class="n">Y_val</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">Y_val</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Accuracy:<span class="w"> </span><span class="m">0</span>.981025641025641
+</code></pre></div>
+
+<h2 id="4-kết-luận">4. Kết luận</h2>
+<p>Support Vector Machine là một giải thuật binary classification được hình thành dựa trên các định lý và công thức toán học về vector, matrix, và tối ưu. Giải thuật này đã được ra đời khá lâu và hiện tại đã có rất nhiều giải thuật machine learning khác cho kết quả vượt trội hơn, tuy nhiên các giá trị toán học nền tảng cho người mới bắt đầu là rất, rất nhiều. Vì vậy, ở các trường đại học trong các môn liên quan đến machine learning, SVM vẫn luôn được dạy. </p>
+<p>Hy vọng các bạn cảm thấy bài viết hữu ích. Nếu có chỗ nào chưa rõ, hãy email và mình sẽ trả lời. Chúc các bạn học tốt. </p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://pabloinsente.github.io/the-convolutional-network">SVM playlist (Youtube) - Prof. Cynthia Rudin</a><br />
+2. <a href="https://www.youtube.com/watch?v=05VABNfa1ds">Support Vector Machines - THE MATH YOU SHOULD KNOW (Youtube)</a><br />
+3. <a href="https://shuzhanfan.github.io/2018/05/understanding-mathematics-behind-support-vector-machines/">Understanding the mathematics behind Support Vector Machines</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code Support Vector Machine". Le Hoang Viet's Homepage, September 2024. https://mikyx-1.github.io/blog/svm.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024svm,
+  title   = {Giải thích và code Support Vector Machine},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {September},
+  url     = {https://mikyx-1.github.io/blog/svm.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

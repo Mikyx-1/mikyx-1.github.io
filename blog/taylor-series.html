@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explain Taylor và Padé series &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Explain Taylor và Padé series</h2>
+<p class="date">2017-01-01 &middot; Mathematics, Approximation</p>
+
+<h2 id="1-introduction-real-life-approximation">1. Introduction: Real-Life Approximation</h2>
+<p>Imagine you are coding an algorithm in a low-level programming language, such as Assembly, which lacks built-in functions for calculating trigonometric and exponential values.
+Unlike Python, where such calculations are effortless thanks to prebuilt libraries, low-level programming demands a different approach. In this scenario, how can you solve the problem ?</p>
+<p>The answer lies in <strong>Function Approximation</strong></p>
+<h2 id="2-taylor-approximation">2. Taylor Approximation</h2>
+<h3 id="21-what-is-taylor-approximation">2.1. What is Taylor Approximation</h3>
+<p>The Taylor approximation represents a function as a polynomial expanded around a specific point. This method is based on the idea that a smooth function can be closely approximated by a sum of its derivatives at a point.</p>
+<h3 id="21-formula">2.1. Formula</h3>
+<p>The Taylor series of a function <span class="math">f(x)</span> around <span class="math">x = a</span> is given by:</p>
+<div class="math math-display">f(x) \approx T_n(x) = f(a) + f'(a)(x-a) + \frac{f''(a)}{2!}(x-a)^2 + \cdots + \frac{f^{(n)}(a)}{n!}(x-a)^n</div>
+<p>For simplicity, if <span class="math">(a = 0)</span>, this becomes the Maclaurin series:
+<span class="math math-display">T_n(x) = f(0) + f'(0)x + \frac{f''(0)}{2!}x^2 + \cdots + \frac{f^{(n)}(0)}{n!}x^n</span></p>
+<h3 id="22-mathematical-proof">2.2. Mathematical Proof</h3>
+<p>According to fundamental theorem of calculus (F.T.C), we have:</p>
+<div class="math math-display">f(x) = \int_{x_0}^{x} f'(x_1)dx_1 + f(x_0)</div>
+<p>Expand the F.T.C, we have: </p>
+<div class="math math-display">\begin{aligned}
+f(x) &amp;= \int_{x_0}^{x} \int_{x_0}^{x_1} f''(x_2)dx_2 dx_1 + f(x_0) + \int_{x_0}^{x}f'(x_0)dx_1 \\ 
+&amp;= \int_{x_0}^{x} \int_{x_0}^{x_1} \int_{x_0}^{x_2} f'''(x_3)dx_3 dx_2 dx_1 + f(x_0) + \int_{x_0}^{x}f'(x_0)dx_1 + \int_{x_0}^{x} \int_{x_0}^{x_1} f''(x_0)dx_2 dx_1 \\ 
+&amp;= \int_{x_0}^{x} ... \int_{x_0}^{x_{n-1}} f^{(n)}(x_n)dx_n dx_{n-1}... dx_2 dx_1 + f(x_0) + ... + \frac{1}{n!} f^{(n)}(x - x_0)^n
+\end{aligned}</div>
+<p>Coin <span class="math">O_1(n) = \int_{x_0}^{x} ... \int_{x_0}^{x_{n-1}} f^{(n)}(x_n)dx_n dx_{n-1}... dx_2 dx_1</span>, <span class="math">O_2(n) = f(x_0) + ... + \frac{1}{n!} f^{(n)}(x - x_0)^n</span>. We have: </p>
+<div class="math math-display">f(x) = O_1(n) + O_2(n)</div>
+<p>The <span class="math">O_1(n)</span>, which comprises nested integrals, is a complete nightmare. In contrast, the rest of the equation is quite straightforward. 
+However, the more we expand the equation, the less important is the first term. Let me prove it. </p>
+<p>Assume that: </p>
+<div class="math math-display">\vert f^{(n)}(x_n) \vert \leq b</div>
+<p>Then, </p>
+<div class="math math-display">\begin{aligned}
+\vert \int_{x_0}^{x} ... \int_{x_0}^{x_{n-1}} f^{(n)}(x_n)dx_n dx_{n-1}... dx_2 dx_1 \vert &amp;\leq \vert f^{(n)}(x_n) \vert \times \vert \int_{x_0}^{x} ... \int_{x_0}^{x_{n-1}}dx_n dx_{n-1}... dx_2 dx_1 \vert \\
+&amp; \leq b \times \frac{(x-x_0)^n}{n!}
+\end{aligned}</div>
+<p>If we expand it further, </p>
+<div class="math math-display">\lim_{n \rightarrow \infty} b \times \frac{(x-x_0)^n}{n!} = 0</div>
+<p>However, in some cases where <span class="math">\vert f^{(n)}(x_n) \vert \leq n^n</span>. Then we will have </p>
+<div class="math math-display">\lim_{n \rightarrow \infty} n^n \times \frac{(x-x_0)^n}{n!} \approx (x-x_0)^n</div>
+<p>This will converge if <span class="math">\vert x - x_0 \vert \leq 1</span>. So you better pick <span class="math">x</span> that is within 1 unit from the <span class="math">x_0</span>. </p>
+<h3 id="23-example-exponential-function">2.3. Example: Exponential Function</h3>
+<p>Approximate <span class="math">f(x) = e^x</span> at <span class="math">x = 0</span>:</p>
+<ul>
+<li><span class="math">f(0) = 1</span>, <span class="math">f'(0) = 1</span>, <span class="math">f''(0) = 1</span>, etc.</li>
+<li>Maclaurin series:
+<span class="math math-display">e^x \approx 1 + x + \frac{x^2}{2!}</span></li>
+</ul>
+<p>For <span class="math">x = 0.5</span>, this gives:<br />
+<span class="math math-display">e^{0.5} \approx 1 + 0.5 + \frac{0.5^2}{2} = 1.6458333333333333</span>
+(True value: 1.6487, Error: 0.00288).</p>
+<p>For <span class="math">x = 1.</span>, this gives:<br />
+<span class="math math-display">e^{1} \approx 1 + 1 + \frac{1^2}{2} = 2.6666666666666665</span>
+(True value: 2.7182, Error: 0.05161)</p>
+<h2 id="3-padé-approximation">3. Padé Approximation</h2>
+<h3 id="31-what-is-padé-approximation">3.1. <strong>What is Padé Approximation?</strong></h3>
+<p>Padé approximation represents a function as a ratio of two polynomials. Unlike Taylor series, which use a single polynomial, Padé excels at approximating functions with singularities or poles and provides better global accuracy.</p>
+<h3 id="32-formula">3.2. <strong>Formula</strong></h3>
+<p>A Padé approximation of order <span class="math">(m, n)</span> for <span class="math">f(x)</span> is given by:
+<span class="math math-display">R_{m,n}(x) = \frac{P_m(x)}{Q_n(x)}</span>
+where:</p>
+<ul>
+<li><span class="math">P_m(x)</span> is a polynomial of degree <span class="math">m</span>,</li>
+<li><span class="math">Q_n(x)</span> is a polynomial of degree <span class="math">n</span>, normalized such that <span class="math">Q_n(0) = 1</span>.</li>
+</ul>
+<p>The coefficients of <span class="math">P_m(x)</span> and <span class="math">Q_n(x)</span> are chosen such that the Taylor series of <span class="math">R_{m,n}(x)</span> matches <span class="math">f(x)</span> as closely as possible up to <span class="math">x^{m+n}</span>.</p>
+<p>The main advantage of Padé approximation over Taylor's is the <strong>flexibility</strong>. In Taylor's polynomial expansion </p>
+<div class="math math-display">\lim_{x \rightarrow \infty} T_n(x) \rightarrow \infty</div>
+<p>and this behaviour is not desireable for functions that never reach <span class="math">\infty</span> such as trigonometric functions. In such cases, Padé can fix this by introducing <span class="math">m=n</span>, which can ensure that the limit of the function will not go to <span class="math">\infty</span>. Furthermore, if the approximated functions will genuinely go to <span class="math">\infty</span> as variables go to <span class="math">\infty</span>, we can also adjust Padé coeffients <span class="math">m&gt;n</span>. Overall, Padé Approximation is a more general approximator of the Taylor's polynomial expansion. </p>
+<p>However, when you use Padé approximation, you shold be <strong>aware of the domain of the denominator since there are certain values that are not computable</strong>. </p>
+<h3 id="33-example-exponential-function">3.3. <strong>Example: Exponential Function</strong></h3>
+<p>For <span class="math">f(x) = e^x</span>, the <span class="math">(2,1)</span> Padé approximation is given by:
+<span class="math math-display">R_{2,1}(x) = \frac{P_1(x)}{Q_1(x)} = \frac{b_0 + b_1x + b_2 x^2}{1 + c_1x},</span>
+where:</p>
+<ul>
+<li><span class="math">P_2(x) = b_0 + b_1x + b_2 x^2</span> is the numerator,</li>
+<li><span class="math">Q_1(x) = 1 + c_1x</span> is the denominator.</li>
+</ul>
+<p>Our goal is to determine the coefficients <span class="math">b_0</span>, <span class="math">b_1</span>, <span class="math">b_2</span>, and <span class="math">c_1</span> by matching the Taylor series expansion of <span class="math">R_{2,1}(x)</span> with <span class="math">f(x)</span> up to <span class="math">x^3</span>.</p>
+<ul>
+<li><strong>Step 1: Expand the Taylor Series for <span class="math">e^x</span></strong></li>
+</ul>
+<div class="math math-display">e^x \approx 1 + x + \frac{x^2}{2} + \frac{x^3}{6}</div>
+<ul>
+<li><strong>Step 2: Match Coefficients</strong></li>
+</ul>
+<div class="math math-display">1 + x +  \frac{x^2}{2} + \frac{x^3}{6} = \frac{b_0 + b_1x + b_2 x^2}{1 + c_1x}</div>
+<ul>
+<li><strong>Step 3: Solve for Coefficients</strong></li>
+</ul>
+<div class="math math-display">\begin{aligned}
+&amp;\leftrightarrow (1+x + \frac{x^2}{2} + \frac{x^3}{6})(1+c_1x) = b_0 + b_1x + b_2 x^2 \\
+&amp;\leftrightarrow 1 + x(1+c_1) + x^2(\frac{1}{2} + c_1) + x^3(\frac{1}{6} + \frac{c_1}{2}) + x^4 \frac{c_1}{6} = b_0 + b_1x + b_2 x^2 \\
+&amp;\leftrightarrow b_0 = 1, c_1 = -\frac{1}{3}, b_1 = \frac{2}{3}, b_2 = \frac{1}{6}
+\end{aligned}</div>
+<ul>
+<li><strong>Step 4: Final Padé Approximation</strong></li>
+</ul>
+<div class="math math-display">R_{2,1}(x) = \frac{P_1(x)}{Q_1(x)} = \frac{1 + \frac{2x}{3} + \frac{x^2}{6}}{1 - \frac{x}{3}},</div>
+<div class="math math-display">R_{2, 1}(0.5) = \frac{1 + \frac{2 \times 0.5}{3} + \frac{0.5^2}{6}}{1 - \frac{0.5}{3}} = 1.65</div>
+<p>(True value: 2.7182, Error: 0.001278)</p>
+<div class="math math-display">R_{2, 1}(1) = \frac{1 + \frac{2 \times 1}{3} + \frac{1^2}{6}}{1 - \frac{1}{3}} = 2.7499</div>
+<p>(True value: 2.7182, Error: 0.0317)</p>
+<p>As you can see, the error of Padé approximation is slightly smaller than that of Taylor approximation. However, in exchange, more computation is used. </p>
+<h2 id="3-summary">3. Summary</h2>
+<p>Taylor approximation is ideal for smooth functions <strong>over a small domain</strong>, providing simplicity and ease of computation. However, if the approximated functions do not go to <span class="math">\infty</span> as Taylor series do, consider applying Padé approximation. </p>
+<p>With that said, which method will you use for your next problem?</p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://www.youtube.com/watch?v=fMC4qk3S1Lw&amp;pp=ygUpQSBiZXR0ZXIgd2F5IHRvIHRoaW5rIGFib3V0IFRheWxvciBzZXJpZXM%3D">A better way to think about Taylor series #SoMEpi - Youtube</a></p>
+<p>2. <a href="https://hep.physics.illinois.edu/home/serrede/P435/Lecture_Notes/Derivation_of_Taylor_Series_Expansion.pdf">Derivation of Taylor Series Expansion</a></p>
+<p>3. <a href="https://byjus.com/maths/taylor-series/">Taylor Series</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Explain Taylor và Padé series". Le Hoang Viet's Homepage, January 2017. https://mikyx-1.github.io/blog/taylor-series.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2017taylorseries,
+  title   = {Explain Taylor và Padé series},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2017},
+  month   = {January},
+  url     = {https://mikyx-1.github.io/blog/taylor-series.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

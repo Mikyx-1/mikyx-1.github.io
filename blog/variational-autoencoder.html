@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code Variational AutoEncoder &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code Variational AutoEncoder</h2>
+<p class="date">2024-05-18 &middot; Generative Models, Deep Learning</p>
+
+<p>Xin chào các bạn!</p>
+<p>Trong bài post này, mình sẽ giới thiệu về mô hình Variational AutoEncoder được công bố trong paper "<a href="https://arxiv.org/abs/1312.6114"><em>Auto-Encoding Variational Bayes</em></a>" của tác giả Diederik P. Kingma và các cộng sự. Đây là một kiến trúc tương tự như AutoEncoder và có thêm thành phần stochastic trong phần bottleneck để khiến cho nó có khả năng tạo ra những data mới lạ (tuy vẫn thuộc distribution của training dataset). </p>
+<h2 id="1-tổng-quan">1. Tổng quan</h2>
+<p>Được chính thức published trong paper "<em>Auto-Encoding Variational Bayes</em>" vào năm 2014, Variational AutoEncoder đã tạo ra tiếng vang rất lớn và tạo ra một cú hích giúp ngày càng nhiều probabilistic models được nghiên cứu hơn. Trong paper của mình, tác giả đề cập tới kiến trúc tổng quan của mô hình, các công thức toán học chứng minh, và một vài tricks để  làm cho VAE có thể hoạt động được. Mình nói tricks để giúp cho model hoạt động được bởi nếu không có trick này thì chắc chắn VAE sẽ không work và các probabilistic models sau này cũng sẽ không phát triển mạnh như bây giờ. </p>
+<p>Về cơ bản, VAE được dùng để tạo ra các dữ liệu mới từ tập data training. Ngoài ra, mô hình còn giải quyết điểm yếu cố hữu của mô hình Auto-Encoder truyền thống trong việc generate data. Một chút về nhược điểm về Auto-Encoder, mô hình này bị ván đề <strong>không sinh ra được data đa dạng và không có tính liên tục trong latent space</strong>. Với sự ra mắt của VAE, 2 nhược điểm này đã được khắc phục. </p>
+<figure style="text-align: center">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSwM6HreoBP1eVWUHsE92aN4LHy0ZW9tgNnjw&s" alt="">
+<figcaption><b>Hình 1.1.</b> Ảnh được sinh ra từ VAE</figcaption>
+</figure>
+
+<h2 id="2-kiến-trúc">2. Kiến trúc</h2>
+<figure style="text-align: center">
+<img src="https://theaisummer.com/static/25f603171034d2fc8f6a518b8537f85a/ee604/vae.png" alt="">
+<figcaption><b>Hình 2.1.</b> Kiến trúc tổng quan của VAE</figcaption>
+</figure>
+
+<p>Về cơ bản, kiến trúc VAE giống gần như 99% với Auto-Encoder. VAE cũng bao gồm encoder, bottleneck, decoder, tuy nhiên có một sự khác biệt ở bottleneck. Đó là ở bottleneck của VAE, nó sẽ có 2 output là mean và standard deviation thay vì chỉ có một output bottleneck như Auto-Encoder. Tuy nhiên, 2 khối này sẽ được kết hợp lại bằng các element-wise operations để  đưa vào decoder block tương tự như auto-encoder. </p>
+<h2 id="3-giải-thích-toán-học">3. Giải thích toán học</h2>
+<p>VAE bao gồm 2 khối: Encoder, và Decoder. Khối encoder có nhiệm vụ nén và mã hóa thông tin trong khi khối decoder có nhiệm vụ khôi phục lại thông tin từ thông tin từ encoder. Việc này có thể được mô tả bằng toán học như sau:</p>
+<div class="math math-display">\text{Encoder: } p(z|x) = \frac{p(x|z)p(z)}{p(x)}</div>
+<div class="math math-display">\text{Decoder: } p(x|z) = \frac{p(z|x)p(x)}{p(z)}</div>
+<p>Đáng tiếc, 2 công thức trên đều rất khó để tính toán vì các priors.</p>
+<p>Cụ thể,</p>
+<div class="math math-display">p(x) = \int p(x|z)p(z)dz</div>
+<div class="math math-display">p(z) = \int p(z|x)p(x)dx</div>
+<p>Nhìn vào 2 công thức trên, chúng ta có quan sát như sau. Để tính đươc p(x), ta phải quét qua toàn bộ các giá trị của latent space và để tính được p(z) ta phải quét qua toàn bộ các giá trị của data x. Nếu latent space và dataset của chúng ta &gt; 1-D, điều này có thể khả thi, tuy nhiên chúng ta thường encode nó trong không gian lớn hơn rất nhiều so với 1D, vậy cần phải có cách khác. </p>
+<p>Cách mà tác giả đề xuất trong paper là dùng một hàm xấp xỉ (approximator) để tính các giá trị latent (z) và reconstructed data (<span class="math">\hat{x}</span>). Cụ thể, chúng sẽ có biểu thức toán học như sau:</p>
+<div class="math math-display">\text{Encoder: } p(z|x) = \frac{p(x|z)p(z)}{p(x)} \text{ (intractable)} =&gt; q_{\theta}(z|x)</div>
+<div class="math math-display">\text{Decoder: } p(x|z) = \frac{p(z|x)p(x)}{p(z)} \text{ (intractable)} =&gt; q_{\phi}(x|z)</div>
+<p>Trong công thức tính của Encoder đã bao gồm Decoder và ngược lại, vì vậy chúng ta chỉ cần tối ưu một trong hai khối và khối còn lại sẽ tự động được tối ưu. Trong paper của tác giả, họ chọn tối ưu Encoder nên trong post này mình cũng sẽ sử dụng Encoder để align với tác giả.</p>
+<p>Vì chúng ta muốn hàm Encoder 
+<span class="math math-display">q_{\theta}(z|x)</span> 
+ xấp xỉ giống y hệt như hàm intractable 
+<span class="math math-display">p(z|x)</span>
+ nên ta sẽ có hàm mục tiêu như sau:</p>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }} D_{KL}(q_{\theta}(z|x)||p(z|x)) \text{ (1)}</div>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }} \mathbb{E}_{q_{\theta}(z|x)}[log(\frac{q_{\theta}(z|x)}{p(z|x)})] \text{ (2)}</div>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }} \mathbb{E}_{q_{\theta}(z|x)}[log(q_{\theta}(z|x)) - log(p(x, z))] + log(p(x)) \text{ (3)}</div>
+<p><span class="math math-display">p(x)</span>
+có thể bị lược ra khỏi hàm loss vì nó không có params tối ưu và không có công dụng nào. Tuy nhiên, ở phần dưới sẽ có một trường hợp không có params tối ưu nhưng vẫn được giữ lại. </p>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }} \mathbb{E}_{q_{\theta}(z|x)}[log(q_{\theta}(z|x)) - log(p_{\phi}(x|z)) - log(p(z))] \text{ (4)}</div>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }}\mathbb{E}_{q_{\theta}(z|x)}[log(\frac{q_{\theta}(z|x)}{p(z)}) - log(p_{\phi}(x|z))] \text{ (5)}</div>
+<div class="math math-display">\underset{\theta, \phi}{\text{Minimise }} \mathbb{E}_{q_{\theta}(z|x)}[-log(p_{\phi}(x|z))] + D_{KL}(q_{\theta}(z|x)||p(z)) \text{ (6)}</div>
+<p>Ta có gradient của phương trình trên với 2 biến <span class="math">\phi</span> và <span class="math">\theta</span> như sau: </p>
+<div class="math math-display">\nabla_{\phi}\mathbb{E}_{q_{\theta}(z|x)}[-log(p_{\phi}(x|z))] + D_{KL}(q_{\theta}(z|x)||p(z)) = \nabla_{\phi}-log(p_{\phi}(x|z)) \text{ (7)}</div>
+<div class="math math-display">\nabla_{\theta}\mathbb{E}_{q_{\theta}(z|x)}[-log(p_{\phi}(x|z))] + D_{KL}(q_{\theta}(z|x)||p(z)) ≠ \nabla_{\theta}D_{KL}(q_{\theta}(z|x)||p(z)) \text{ (8)}</div>
+<p>Ở phương trình (7), gradient có thể được tính dễ dàng nhờ vào Monte Carlo. Tuy nhiên, ở phương trình (8), ta không thể xấp xỉ bằng Monte Carlo do vướng phải parameter <span class="math">\theta</span> ở phần expectation. Nếu phần phân phối tính expectation dựa vào <span class="math">\theta</span> được thay bằng một biến nào đó không liên quan thì phương trình (8) sẽ đơn giản trở thành tối ưu KL divergence. </p>
+<p>Để giải quyết vấn đề này, tác giả của paper đã đề xuất reparameterisation trick. Ý tưởng của phương pháp này như sau:</p>
+<p>Giả sử ta có một biến <span class="math">z \sim N(\mu, \sigma^2)</span>, ta có thể biểu diễn nó như sau:</p>
+<div class="math math-display">z = \mu + \sigma^2 * \epsilon</div>
+<div class="math math-display">\text{Với } \epsilon \sim N(\mathbf{0}, I)</div>
+<p>Dựa vào reparameterisation trick, ta sẽ áp dụng như sau:</p>
+<div class="math math-display">z = g_{\theta}(x, \epsilon) =  \mu_{\theta}(x) + \sigma_{\theta}^2(x) * \epsilon</div>
+<div class="math math-display">\text{Với } \epsilon \sim N(\mathbf{0}, I)</div>
+<figure style="text-align: center">
+<img src="https://dilithjay.com/assets/images/reparam-trick.png" alt="">
+<figcaption><b>Hình 3.1.</b> Minh họa cách hoạt động của Reparameterisation trick</figcaption>
+</figure>
+
+<p>Áp dụng reparameterisation trick, ta biến đổi lại phương trình (8) như sau:</p>
+<div class="math math-display">\nabla_{\theta}\mathbb{E}_{p(\epsilon)}[-log(p_{\phi}(x|z = g_{\theta}(x, \epsilon)))] + D_{KL}(q_{\theta}(z|x)||p(z)) ≠ \nabla_{\theta}D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon)|x)||p(z)) \text{ (9)}</div>
+<p>Với Expectation không còn <span class="math">\theta</span> trong (9), chúng ta có thể tính gradient một cách dễ dàng như sau:</p>
+<div class="math math-display">\nabla_{\theta}\mathbb{E}_{p(\epsilon)}[-log(p_{\phi}(x|z = g_{\theta}(x, \epsilon)))] + D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) = \nabla_{\theta}D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) \text{ (10)}</div>
+<p>Tới đây, chúng ta đã có được phương trình để tính gradient cập nhật trọng số cho model.</p>
+<p>Tóm lại, chúng ta sẽ cần phương trình (7) và (10) để cập nhật các parameters trong mạng. Mình sẽ viết lại 2 phương trình sau khi được áp dụng reparameterisation trick. </p>
+<div class="math math-display">\nabla_{\phi}\mathbb{E}_{p(\epsilon)}[-log(p_{\phi}(x|z = g_{\theta}(x, \epsilon)))] + D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) = \nabla_{\phi}-log(p_{\phi}(x|z = g_{\theta}(x, \epsilon))) \text{ (7)}</div>
+<div class="math math-display">\nabla_{\theta}\mathbb{E}_{p(\epsilon)}[-log(p_{\phi}(x|z = g_{\theta}(x, \epsilon)))] + D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) = \nabla_{\theta}D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) \text{ (10)}</div>
+<p>Phương trình (7) chỉ đơn giản là tối ưu các tham số của decoder sao để cho reconstructed data giống với data gốc. Chúng ta có thể dùng L1, L2, Binary Cross Entropy, ... Tuy nhiên, đối với phương trình (10), chúng ta phải sample từ prior <span class="math">p(z)</span> và <span class="math">\epsilon \sim N(\mathbf{0}, \mathbf{I})</span>, và việc sample mỗi iteration mỗi khác như vậy sẽ khiến <strong>việc training khó hội tụ hơn</strong>, vì thế cần một cách thức khác để có thể tối ưu nó mà không cần sample từ các distributions. </p>
+<p>Chúng ta sẽ assume latent space z là một phân phối Gaussian và prior của nó là một phân bố Gauss tiêu chuẩn  <span class="math">p(z) =  N(0, I)</span> và posterior <span class="math">q_{\theta}(z = g_{\theta}(x, \epsilon)) = N(\mu_{\theta}(x), \sigma_{\theta}^2(x))</span>.</p>
+<p>Vì vậy, chúng ta có thể biến đổi (10) thành:</p>
+<div class="math math-display">\nabla_{\theta}D_{KL}(q_{\theta}(z = g_{\theta}(x, \epsilon))||p(z)) = D_{KL}(N(\mu_{\theta}(x), \sigma_{\theta}^2(x))|| N(0, I)) \text{ (11)}</div>
+<p>Theo công thức Gauss, ta có:</p>
+<div class="math math-display">q_{\theta}(z = g_{\theta}(x, \epsilon)) = \frac{1}{\sigma \sqrt {2\pi} } e^{-0.5(\frac{z - \mu_{\theta}(x)}{\sigma_{\theta}(x)})^2}</div>
+<div class="math math-display">p(z) = \frac{1}{\sqrt {2\pi}}e^{-0.5z^2}</div>
+<p>Từ 2 công thức Gauss trên, ta áp dụng vào để tính khoảng cách Kullback-Leibler một cách deterministic. </p>
+<div class="math math-display">D_{KL}(N(\mu_{\theta}(x), \sigma_{\theta}^2(x))|| N(0, I)) = \mathbb{E}_{q_{\theta}}[log(q_{\theta}) - log(p(z))]</div>
+<div class="math math-display">\mathbb{E}_{q_{\theta}}[log(\frac{1}{\sigma_{\theta} \sqrt{2 \pi}}) - \frac{1}{2}(\frac{z - \mu_{\theta}}{\sigma_{\theta}})^2 - log(\frac{1}{\sqrt{2 \pi}}) + \frac{1}{2} z^2]</div>
+<div class="math math-display">\mathbb{E}_{q_{\theta}}[log(\frac{1}{\sigma_{\theta} \sqrt{2 \pi}}) - log(\frac{1}{\sqrt{2 \pi}})] + \mathbb{E}_{q_{\theta}}[- \frac{1}{2}(\frac{z - \mu_{\theta}}{\sigma_{\theta}})^2] + \mathbb{E}_{q_{\theta}}[\frac{1}{2} z^2]</div>
+<p>Trong đó:</p>
+<div class="math math-display">\mathbb{E}_{q_{\theta}}[log(\frac{1}{\sigma_{\theta} \sqrt{2 \pi}}) - log(\frac{1}{\sqrt{2 \pi}})] = - \frac{1}{2}log(\sigma_{\theta})</div>
+<div class="math math-display">\mathbb{E}_{q_{\theta}}[- \frac{1}{2}(\frac{z - \mu_{\theta}}{\sigma_{\theta}})^2] = - \frac{1}{2}</div>
+<div class="math math-display">\mathbb{E}_{q_{\theta}}[\frac{1}{2} z^2] = \frac{1}{2}(\sigma_{\theta}^2 + \mu_{\theta}^2)</div>
+<p>Vì vậy, tổng hợp lại ta có được là:</p>
+<div class="math math-display">D_{KL}(N(\mu_{\theta}(x), \sigma_{\theta}^2(x))|| N(0, I)) = \frac{1}{2}[-log(\sigma_{\theta}^2) - 1 + \sigma_{\theta}^2 + \mu_{\theta}^2]</div>
+<h2 id="4-code-vae-với-python-và-keras">4. Code VAE với Python và Keras</h2>
+<p>Ở phần này, một mô hình VAE đơn giản sẽ được xây dựng và train với ngôn ngữ Python và thư viện Keras để kiểm chứng lý thuyết.</p>
+<ul>
+<li><strong>Bước 1</strong>: Import các thư viện cần thiết</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;KERAS_BACKEND&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tensorflow&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">keras</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keras</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keras</span><span class="w"> </span><span class="kn">import</span> <span class="n">layers</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 2</strong>: Model </li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Sampling step from mean and var</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Sampling</span><span class="p">(</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seed_generator</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SeedGenerator</span><span class="p">(</span><span class="mi">1337</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+        <span class="n">z_mean</span><span class="p">,</span> <span class="n">z_log_var</span> <span class="o">=</span> <span class="n">inputs</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">z_mean</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">dim</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">z_mean</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">epsilon</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">dim</span><span class="p">),</span> <span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">seed_generator</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">z_mean</span> <span class="o">+</span> <span class="n">ops</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">z_log_var</span><span class="p">)</span> <span class="o">*</span> <span class="n">epsilon</span>
+
+<span class="c1"># Encoder</span>
+<span class="n">latent_dim</span> <span class="o">=</span> <span class="mi">2</span>
+
+<span class="n">encoder_inputs</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s2">&quot;same&quot;</span><span class="p">)(</span><span class="n">encoder_inputs</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s2">&quot;same&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Flatten</span><span class="p">()(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">z_mean</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">latent_dim</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;z_mean&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">z_log_var</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">latent_dim</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;z_log_var&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">Sampling</span><span class="p">()([</span><span class="n">z_mean</span><span class="p">,</span> <span class="n">z_log_var</span><span class="p">])</span>
+<span class="n">encoder</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">encoder_inputs</span><span class="p">,</span> <span class="p">[</span><span class="n">z_mean</span><span class="p">,</span> <span class="n">z_log_var</span><span class="p">,</span> <span class="n">z</span><span class="p">],</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;encoder&quot;</span><span class="p">)</span>
+
+<span class="c1"># Decoder</span>
+<span class="n">latent_inputs</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">latent_dim</span><span class="p">,))</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">7</span> <span class="o">*</span> <span class="mi">7</span> <span class="o">*</span> <span class="mi">64</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">)(</span><span class="n">latent_inputs</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Reshape</span><span class="p">((</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">64</span><span class="p">))(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Conv2DTranspose</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s2">&quot;same&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Conv2DTranspose</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;relu&quot;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s2">&quot;same&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">decoder_outputs</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">Conv2DTranspose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;sigmoid&quot;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s2">&quot;same&quot;</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">decoder</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">latent_inputs</span><span class="p">,</span> <span class="n">decoder_outputs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;decoder&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 3</strong>: Training and loss functions</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">VAE</span><span class="p">(</span><span class="n">keras</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encoder</span><span class="p">,</span> <span class="n">decoder</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">encoder</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span> <span class="o">=</span> <span class="n">decoder</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_loss_tracker</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;total_loss&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction_loss_tracker</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">Mean</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;reconstruction_loss&quot;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kl_loss_tracker</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;kl_loss&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">total_loss_tracker</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction_loss_tracker</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">kl_loss_tracker</span><span class="p">,</span>
+        <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">tf</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">tape</span><span class="p">:</span>
+            <span class="n">z_mean</span><span class="p">,</span> <span class="n">z_log_var</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">reconstruction</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+            <span class="n">reconstruction_loss</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
+                <span class="n">ops</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                    <span class="n">keras</span><span class="o">.</span><span class="n">losses</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reconstruction</span><span class="p">),</span>
+                    <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">kl_loss</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">z_log_var</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">z_mean</span><span class="p">)</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">z_log_var</span><span class="p">))</span>
+            <span class="n">kl_loss</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">kl_loss</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">total_loss</span> <span class="o">=</span> <span class="n">reconstruction_loss</span> <span class="o">+</span> <span class="n">kl_loss</span>
+        <span class="n">grads</span> <span class="o">=</span> <span class="n">tape</span><span class="o">.</span><span class="n">gradient</span><span class="p">(</span><span class="n">total_loss</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">trainable_weights</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">optimizer</span><span class="o">.</span><span class="n">apply_gradients</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">trainable_weights</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_loss_tracker</span><span class="o">.</span><span class="n">update_state</span><span class="p">(</span><span class="n">total_loss</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction_loss_tracker</span><span class="o">.</span><span class="n">update_state</span><span class="p">(</span><span class="n">reconstruction_loss</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kl_loss_tracker</span><span class="o">.</span><span class="n">update_state</span><span class="p">(</span><span class="n">kl_loss</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;loss&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_loss_tracker</span><span class="o">.</span><span class="n">result</span><span class="p">(),</span>
+            <span class="s2">&quot;reconstruction_loss&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction_loss_tracker</span><span class="o">.</span><span class="n">result</span><span class="p">(),</span>
+            <span class="s2">&quot;kl_loss&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kl_loss_tracker</span><span class="o">.</span><span class="n">result</span><span class="p">(),</span>
+        <span class="p">}</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 4</strong>: Training</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="p">(</span><span class="n">x_train</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="p">(</span><span class="n">x_test</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">mnist</span><span class="o">.</span><span class="n">load_data</span><span class="p">()</span>
+<span class="n">mnist_digits</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">x_train</span><span class="p">,</span> <span class="n">x_test</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">mnist_digits</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">mnist_digits</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;float32&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+
+<span class="n">vae</span> <span class="o">=</span> <span class="n">VAE</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span> <span class="n">decoder</span><span class="p">)</span>
+<span class="n">vae</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">())</span>
+<span class="n">vae</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">mnist_digits</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 5</strong>: Visualise kết quả</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_latent_space</span><span class="p">(</span><span class="n">vae</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+    <span class="c1"># display a n*n 2D manifold of digits</span>
+    <span class="n">digit_size</span> <span class="o">=</span> <span class="mi">28</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">figure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">digit_size</span> <span class="o">*</span> <span class="n">n</span><span class="p">,</span> <span class="n">digit_size</span> <span class="o">*</span> <span class="n">n</span><span class="p">))</span>
+    <span class="c1"># linearly spaced coordinates corresponding to the 2D plot</span>
+    <span class="c1"># of digit classes in the latent space</span>
+    <span class="n">grid_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="n">scale</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="n">grid_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="n">scale</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">n</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">yi</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">grid_y</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">xi</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">grid_x</span><span class="p">):</span>
+            <span class="n">z_sample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">xi</span><span class="p">,</span> <span class="n">yi</span><span class="p">]])</span>
+            <span class="n">x_decoded</span> <span class="o">=</span> <span class="n">vae</span><span class="o">.</span><span class="n">decoder</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">z_sample</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">digit</span> <span class="o">=</span> <span class="n">x_decoded</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">digit_size</span><span class="p">,</span> <span class="n">digit_size</span><span class="p">)</span>
+            <span class="n">figure</span><span class="p">[</span>
+                <span class="n">i</span> <span class="o">*</span> <span class="n">digit_size</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">digit_size</span><span class="p">,</span>
+                <span class="n">j</span> <span class="o">*</span> <span class="n">digit_size</span> <span class="p">:</span> <span class="p">(</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">digit_size</span><span class="p">,</span>
+            <span class="p">]</span> <span class="o">=</span> <span class="n">digit</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="n">figsize</span><span class="p">,</span> <span class="n">figsize</span><span class="p">))</span>
+    <span class="n">start_range</span> <span class="o">=</span> <span class="n">digit_size</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">end_range</span> <span class="o">=</span> <span class="n">n</span> <span class="o">*</span> <span class="n">digit_size</span> <span class="o">+</span> <span class="n">start_range</span>
+    <span class="n">pixel_range</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">start_range</span><span class="p">,</span> <span class="n">end_range</span><span class="p">,</span> <span class="n">digit_size</span><span class="p">)</span>
+    <span class="n">sample_range_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">grid_x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">sample_range_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">grid_y</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">pixel_range</span><span class="p">,</span> <span class="n">sample_range_x</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="n">pixel_range</span><span class="p">,</span> <span class="n">sample_range_y</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;z[0]&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;z[1]&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">figure</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;Greys_r&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+<span class="n">plot_latent_space</span><span class="p">(</span><span class="n">vae</span><span class="p">)</span>
+</code></pre></div>
+
+<figure style="text-align: center">
+<img src="https://keras.io/img/examples/generative/vae/vae_14_0.png" alt="">
+<figcaption><b>Hình 4.1.</b> Visualisation của các samples được sinh ra từ VAE</figcaption>
+</figure>
+
+<h2 id="5-kết-luận">5. Kết luận</h2>
+<p>VAE là một kiến trúc tạo data với cơ chế stochastic, điều này cho khả năng tạo ra những samples khác hơn so với data gốc. Tuy nhiên, sự khác biệt này sẽ không cực kì đáng kể  và chất lượng sẽ khó có thể so sánh với GAN, hoặc Diffusion models. Tuy nhiên, đây vẫn là một kiến trúc rất tốt để học học vì các kiến trúc ra sau áp dụng stochastic đa số đều dựa trên reparameterisation trick của VAE. </p>
+<p>Trong bài, mình đã giới thiệu về VAE, các công thức toán để chứng minh VAE hoạt động, và cũng như code nó với keras và tensorflow. Hy vọng các bạn thấy hữu ích và đừng ngần ngại gửi feedback vào email mình nếu chưa hiểu hoặc thấy sai sót nhé. Chúc các bạn học tốt.</p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://arxiv.org/abs/1312.6114">Auto-Encoding Variational Bayes - arXiv</a><br />
+2. <a href="https://anhquannguyen21.github.io/2022-03-12-Variational-Autoencoder/">Variational Autoencoder - Blog</a><br />
+3. <a href="https://keras.io/examples/generative/vae/">Keras implementation of VAE - Keras</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code Variational AutoEncoder". Le Hoang Viet's Homepage, May 2024. https://mikyx-1.github.io/blog/variational-autoencoder.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024variationalautoencoder,
+  title   = {Giải thích và code Variational AutoEncoder},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {May},
+  url     = {https://mikyx-1.github.io/blog/variational-autoencoder.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

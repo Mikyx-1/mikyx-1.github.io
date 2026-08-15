@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích tường tận và code giải thuật Principal Component Analysis &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích tường tận và code giải thuật Principal Component Analysis</h2>
+<p class="date">2024-06-30 &middot; Machine Learning, Dimensionality Reduction</p>
+
+<p>Xin chào các bạn,</p>
+<p>Trong bài post này, mình sẽ trình bày về một giải thuật dùng để giảm chiều dữ liệu có tên là <strong>Principle Component Analysis (PCA)</strong>. Đây là một giải thuật khá cổ tuy nhiên những giá trị toán học nó mang lại vẫn trường tồn theo thời gian. Chúng ta hãy cùng khám phá xem nó hoạt động như thế nào nhé.</p>
+<p><img alt="Image" src="https://kindsonthegenius.com/blog/wp-content/uploads/2018/11/Principal-2BComponents-2BAnalysis-2BTutorial.jpg" /></p>
+<h2 id="1-giới-thiệu">1. Giới thiệu</h2>
+<p>Như đã đề cập ở tiêu đề, PCA là một giải thuật dùng để giảm chiều của dữ liệu trong khi tối thiểu thông tin mất mát. Nó có rất nhiều ứng dụng thực tế như: </p>
+<ul>
+<li><strong>Visualise data</strong></li>
+<li><strong>Data Compression</strong>
+*</li>
+</ul>
+<h2 id="2-how-it-works">2. How it works</h2>
+<p>Ở phần này, mình sẽ hướng dẫn implement PCA với chỉ thư viện numpy. Bộ dữ liệu minh sẽ sử dụng là tập Iris dataset từ thư viện sklearn.</p>
+<ul>
+<li><strong>Bước 1</strong>: Load các thư viện cần sử dụng</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span> <span class="c1"># For calculation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn</span><span class="w"> </span><span class="kn">import</span> <span class="n">datasets</span> <span class="c1"># For dataset</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span> <span class="c1"># For visualisation</span>
+
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">load_iris</span><span class="p">()[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Data dimension: </span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Data<span class="w"> </span>dimension:<span class="w"> </span><span class="o">(</span><span class="m">150</span>,<span class="w"> </span><span class="m">4</span><span class="o">)</span>
+</code></pre></div>
+
+<p>Tập Iris dataset có dimension là 4, chúng ta muốn giảm nó xuống 2 hoặc 3 để có thể visualise nó. Và chúng ta sẽ thực hiện visualise bằng PCA.</p>
+<ul>
+<li><strong>Bước 2</strong>: Normalise data</li>
+</ul>
+<p>Trước khi áp dụng PCA, data phải cần được tiêu chuẩn hóa cho các feature. Điều này giúp cho tất cả các feature của ma trận covariance có cùng 1 range với nhau.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="n">data</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 2</strong>: Tìm eigen values và eigen vectors</li>
+</ul>
+<p>Ở bước 2 này, chúng ta sẽ tìm tất cả eigen values và eigen vectors của ma trận covariance data.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">data_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+<span class="n">eigen_values</span><span class="p">,</span> <span class="n">eigen_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">data_cov</span><span class="p">)</span>
+<span class="n">eigen_vectors</span> <span class="o">=</span> <span class="n">eigen_vectors</span><span class="o">.</span><span class="n">T</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 3</strong>: Lọc ra k eigenvectors có eigenvalues lớn nhất</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="n">pca_dim</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="k">assert</span> <span class="n">pca_dim</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;pca dim &gt; num feature, invalid operation&quot;</span>
+<span class="n">idxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">eigen_values</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">chosen_eigen_vectors</span> <span class="o">=</span> <span class="n">eigen_vectors</span><span class="p">[</span><span class="n">idxes</span><span class="p">[:</span><span class="n">pca_dim</span><span class="p">]]</span><span class="o">.</span><span class="n">T</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Bước 4</strong>: Dùng <strong>k</strong> eigenvectors để làm principal components</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="n">new_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">chosen_eigen_vectors</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Old data shape: </span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, New data shape: </span><span class="si">{</span><span class="n">new_data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Old<span class="w"> </span>data<span class="w"> </span>shape:<span class="w"> </span><span class="o">(</span><span class="m">150</span>,<span class="w"> </span><span class="m">4</span><span class="o">)</span>,<span class="w"> </span>New<span class="w"> </span>data<span class="w"> </span>shape:<span class="w"> </span><span class="o">(</span><span class="m">150</span>,<span class="w"> </span><span class="m">2</span><span class="o">)</span>
+</code></pre></div>
+
+<p>Và đây là class được tích hợp từ các steps trên để thực hiện PCA cho dữ liệu. </p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">pca</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> 
+        <span class="n">pca_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+
+    <span class="c1"># Step 1: Rescale data</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">data_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+    <span class="n">eigen_values</span><span class="p">,</span> <span class="n">eigen_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">data_cov</span><span class="p">)</span>
+    <span class="n">eigen_vectors</span> <span class="o">=</span> <span class="n">eigen_vectors</span><span class="o">.</span><span class="n">T</span>
+
+    <span class="n">idxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">eigen_values</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">chosen_eigen_vectors</span> <span class="o">=</span> <span class="n">eigen_vectors</span><span class="p">[</span><span class="n">idxes</span><span class="p">][:</span><span class="n">pca_dim</span><span class="p">]</span><span class="o">.</span><span class="n">T</span>
+    <span class="n">new_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">chosen_eigen_vectors</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Old data shape: </span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, New data shape: </span><span class="si">{</span><span class="n">new_data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">new_data</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Test</strong></li>
+</ul>
+<p>Đối với giảm chiều dữ liệu, chúng ta cũng có thể cắt bỏ các chiều dữ liệu khác một cách ngẫu nhiên, tuy nhiên PCA cho chúng ta một dữ liệu với ít chiều hơn nhưng lượng thông tin giữ lại được có nhiều <strong>ý nghĩa</strong> hơn so với việc bỏ những dimension khác một cách ngẫu nhiên. Và trong nhiều trường hợp, bạn sẽ thấy việc dùng PCA còn giúp tăng đáng kể performance của ML models vì PCA giúp loại ra được những chiều thông tin dư. </p>
+<p>Ở đây, mình sẽ thực nghiệm với tập dataset iris của sklearn để xem performance của machine learning khi được train trên PCA.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Step 1: Import necessary libraries</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn</span><span class="w"> </span><span class="kn">import</span> <span class="n">datasets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn</span><span class="w"> </span><span class="kn">import</span> <span class="n">tree</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Divide into train and val dataset</span>
+<span class="n">iris</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">load_iris</span><span class="p">()[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">load_iris</span><span class="p">()</span><span class="o">.</span><span class="n">data</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">load_iris</span><span class="p">()</span><span class="o">.</span><span class="n">target</span>
+
+<span class="n">idxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">idxes</span><span class="p">[:</span><span class="mi">100</span><span class="p">]]</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[</span><span class="n">idxes</span><span class="p">[:</span><span class="mi">100</span><span class="p">]]</span>
+
+<span class="n">X_val</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">idxes</span><span class="p">[</span><span class="mi">100</span><span class="p">:]]</span>
+<span class="n">Y_val</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[</span><span class="n">idxes</span><span class="p">[</span><span class="mi">100</span><span class="p">:]]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;X_train shape: </span><span class="si">{</span><span class="n">X_train</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, Y_train shape: </span><span class="si">{</span><span class="n">Y_train</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, X_val shape: </span><span class="si">{</span><span class="n">X_val</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, Y_val shape: </span><span class="si">{</span><span class="n">Y_val</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Perform PCA on X_train dataset</span>
+<span class="n">pca</span> <span class="o">=</span> <span class="n">PCA</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">pca</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
+<span class="n">X_train_transformed</span> <span class="o">=</span> <span class="n">pca</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
+<span class="n">X_val_transformed</span> <span class="o">=</span> <span class="n">pca</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Init classifiers</span>
+
+<span class="n">classifier1</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">DecisionTreeClassifier</span><span class="p">()</span>
+<span class="n">classifier1</span> <span class="o">=</span> <span class="n">classifier1</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">)</span>
+
+<span class="n">classifier2</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">DecisionTreeClassifier</span><span class="p">()</span>
+<span class="n">classifier2</span> <span class="o">=</span> <span class="n">classifier2</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train_transformed</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Inference on val set</span>
+<span class="n">non_pca_predictions</span> <span class="o">=</span> <span class="n">classifier1</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+<span class="n">pca_predictions</span> <span class="o">=</span> <span class="n">classifier2</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_val_transformed</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Without PCA Accuracy: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">non_pca_predictions</span><span class="p">[</span><span class="n">non_pca_predictions</span><span class="o">==</span><span class="n">Y_val</span><span class="p">])</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">non_pca_predictions</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;With PCA Accuracy: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pca_predictions</span><span class="p">[</span><span class="n">pca_predictions</span><span class="o">==</span><span class="n">Y_val</span><span class="p">])</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">pca_predictions</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Without<span class="w"> </span>PCA<span class="w"> </span>Accuracy:<span class="w"> </span><span class="m">0</span>.96
+With<span class="w"> </span>PCA<span class="w"> </span>Accuracy:<span class="w"> </span><span class="m">1</span>.0
+</code></pre></div>
+
+<p>Ở ví dụ này, PCA đã giúp chúng ta tăng accuracy lên 100%. Ở case này, PCA giúp chúng ta cô đọng được thông tin nhiều hơn và có thể đã giảm được hiện tượng overfitting trên tập train nên đã dẫn tới kết quả tốt hơn.</p>
+<h2 id="3-giải-thích-toán-của-pca">3. Giải thích toán của PCA</h2>
+<p>Principal Component Analysis là lời giải cho bài toán optimisation ứng dụng phương pháp Larange. Ta có phát biểu của bài toán như sau:</p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích tường tận và code giải thuật Principal Component Analysis". Le Hoang Viet's Homepage, June 2024. https://mikyx-1.github.io/blog/pca.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024pca,
+  title   = {Giải thích tường tận và code giải thuật Principal Component Analysis},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {June},
+  url     = {https://mikyx-1.github.io/blog/pca.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>

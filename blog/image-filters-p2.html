@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 2 &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 2</h2>
+<p class="date">2024-04-27 &middot; Image Processing, Edge Detection</p>
+
+<p>Xin chào các bạn,</p>
+<p>Nối tiếp series phần 1 của bộ lọc, bài post này sẽ giới thiệu thêm một vài bộ lọc nâng cao hơn của phần 1 với trọng tâm chính là tìm cạnh trong ảnh (edge detection). </p>
+<p><img alt="Image" src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/%C3%84%C3%A4retuvastuse_n%C3%A4ide.png/500px-%C3%84%C3%A4retuvastuse_n%C3%A4ide.png" /></p>
+<h2 id="1-giới-thiệu-về-edge-detection">1. Giới thiệu về edge detection</h2>
+<p>Phát hiện cạnh là giải thuật để trích xuất ra tất cả các cạnh trong một bức ảnh. Việc trích xuất ra được edge này có rất nhiều công dụng hữu ích cho việc phát hiện đường thẳng, trích xuất features, phát hiện blob, ... Và những ứng dụng của nó vào khâu tiền xử lý của những thuật toán này sẽ được mình cover vào các bài khác (các bạn nhớ đón đọc nhé). </p>
+<h2 id="2-cách-hoạt-động">2. Cách hoạt động</h2>
+<p>Cách để tìm ra cạnh trong một bức ảnh đơn giản là tìm những đoạn mà có sự thay đổi lớn giữa các giá trị pixels hoặc giá trị gradient tại điểm đó lớn. Mình lấy một ví dụ minh họa như sau: </p>
+<div class="codehilite"><pre><span></span><code>Image = [0.   1.   1.   0.]
+        [0.   1.   1.   0.]
+        [0.   1.   1.   0.]
+        [0.   1.   1.   0.]
+</code></pre></div>
+
+<p>Giả sử ở hình trên, ta thấy được rằng có 1 cạnh nằm giữa tấm ảnh (2 cột 1.). Và ta muốn lọc ra được cạnh này.</p>
+<p>Nếu quan sát có thể nhận thấy rằng, ở những cạnh như vậy giá trị gradient sẽ có giá trị lớn. Và đó cũng là nguyên lý mà nhiều thuật toán áp dụng để tìm ra cạnh trong một bức ảnh. Ta sẽ dùng gradient để xác định xem liệu đó có phải là cạnh hay không. Công thức để tính gradient với các pixels như sau:</p>
+<div class="math math-display">\frac{\delta f(x, y)}{\delta x \delta y} = \frac{\delta f(x, y)}{\delta x} + \frac{\delta f(x, y)}{\delta y}</div>
+<p>Với </p>
+<div class="math math-display">\frac{\delta f(x, y)}{\delta x} = f(x+1, y) - f(x, y)</div>
+<div class="math math-display">\frac{\delta f(x, y)}{\delta y} = f(x, y+1) - f(x, y)</div>
+<h2 id="3-các-loại-bộ-lọc">3. Các loại bộ lọc</h2>
+<p>Trong phần này, mình sẽ giới thiệu các bộ lọc cạnh cũng như demo code để minh họa rõ hơn về cách hoạt động của các bộ lọc này. </p>
+<h2 id="31-prewitt-filter">3.1. Prewitt filter</h2>
+<p>Bộ lọc Prewitt filter được phát triển bởi Judith M. S. Prewitt và bộ lọc này hoạt động y như phần lý thuyết mình đã mô tả ở trên. Tuy nhiên, Prewitt đã có chỉnh sửa một chút là dùng đạo hàm giữa 2 pixel cách nhau 1 pixel thay vì lấy 2 pixels liên tiếp để tính đạo hàm. </p>
+<div class="codehilite"><pre><span></span><code>kernelX = [-1 0  1]
+          [-1 0  1]
+          [-1 0  1]
+
+kernelY = [-1    -1   -1]
+          [0     0     0]
+          [1     1     1]
+</code></pre></div>
+
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">### Implement Prewitt Filter</span>
+
+<span class="n">prewittGx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+                   <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">prewittGy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">prewittX</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">prewittGx</span><span class="p">)</span>
+<span class="n">prewittY</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">prewittGy</span><span class="p">)</span>
+<span class="n">prewitt</span> <span class="o">=</span> <span class="n">prewittX</span> <span class="o">+</span> <span class="n">prewittY</span>
+
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">))</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Prewitt in X direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prewittX</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Prewitt in X direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prewittY</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Prewitt in Y direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prewitt</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Prewitt Filter&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/image-filters-p2/image-4.png" /></p>
+<h2 id="32-roberts-filter">3.2. Roberts filter</h2>
+<p>Roberts filter là bộ lọc được tìm ra bởi Lawrence Roberts vào năm 1963. Đây có thể được coi như là một trong những bộ lọc được ra đời sớm nhất trong tất cả các bộ lọc edge detection.</p>
+<p>Vì nó được ra mắt sớm hơn các bộ lọc cạnh khác nên có có cấu tạo khá đơn giản. Bộ lọc bao gồm 2 ma trận 2x2 như sau:</p>
+<div class="codehilite"><pre><span></span><code>kernelX = [-1   0]
+          [0    1]
+
+kernelY = [0  1]
+          [-1  0]
+</code></pre></div>
+
+<p>Tuy được gán là <span class="math">G_x \text{và } G_y</span> nhưng hai ma trận này không tính gradient theo hai phương đó mà tính theo 2 phương chéo nhau (mình đặt vậy để dễ phân biệt).</p>
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">### Implement Roberts Filter</span>
+<span class="n">robertsGx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> 
+               <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">robertsGy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+               <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
+
+<span class="n">robertsX</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">robertsGx</span><span class="p">)</span>
+<span class="n">robertsY</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">robertsGy</span><span class="p">)</span>
+
+<span class="n">roberts</span> <span class="o">=</span> <span class="n">robertsX</span> <span class="o">+</span> <span class="n">robertsY</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">))</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Raw Image&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">robertsX</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Roberts in X direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">robertsY</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Roberts in Y direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">roberts</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Roberts filter&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/image-filters-p2/image-2.png" /></p>
+<h2 id="33-sobel-filter">3.3. Sobel filter</h2>
+<p>Tên đầy đủ của bộ lọc này là Sobel-Feldman được đặt tên theo 2 người cùng nghiên cứu và phát triển nó tại AI lab của đại học Standford. Bộ lọc Sobel về cơ bản giống y chang bộ lọc Prewitt, chỉ khác ở chỗ phần pixel trọng tâm của kernel sẽ được đánh trọng số là 2 thay vì 1 như Prewitt filter. </p>
+<p>Sobel filter hoạt động theo kiểu tích chập. Nó gồm hai ma trận <span class="math">G_x, \text{ và } G_y</span> và nó có dạng như sau:</p>
+<div class="codehilite"><pre><span></span><code>kernelX = [-1 0 1]
+      [-2 0 2]
+      [-1 0 1]
+
+kernelY = [-1    -2   -1]
+      [0      0    0]
+      [1      2    1]
+</code></pre></div>
+
+<p><strong>Code</strong> </p>
+<div class="codehilite"><pre><span></span><code><span class="c1">### Implement Sobel Filter</span>
+
+<span class="n">sobelGx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+                   <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">sobelGy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> 
+                   <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">sobelX</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">sobelGx</span><span class="p">)</span>
+<span class="n">sobelY</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">sobelGy</span><span class="p">)</span>
+<span class="n">sobel</span> <span class="o">=</span> <span class="n">sobelX</span> <span class="o">+</span> <span class="n">sobelY</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">))</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Image&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sobelX</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Sobel in X direction&quot;</span><span class="p">)</span>   
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sobelY</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Sobel in Y direction&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sobel</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Sobel&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/image-filters-p2/image-3.png" /></p>
+<h2 id="34-laplacian-filter">3.4. Laplacian filter</h2>
+<p>Laplacian filter áp dụng thêm đạo hàm bậc 2 để tìm ra cạnh. Việc sử dụng đạo hàm bậc 2 này sẽ giúp phát hiện ra nhiều cạnh hơn so với các phương pháp trên. Tuy nhiên, nó cũng sẽ dễ bị ảnh hưởng bởi noise nhiều hơn. </p>
+<p><strong>Công thức toán</strong></p>
+<div class="math math-display">\Delta ^2f = \frac{\delta ^2 f}{\delta x^2} + \frac{\delta ^2 f}{\delta y^2}</div>
+<p>Theo phương x,</p>
+<div class="math math-display">\frac{\delta ^2 f}{\delta x^2} = f(x+1, y) + f(x-1, y) - 2f(x, y)</div>
+<p>Theo phương y, </p>
+<div class="math math-display">=&gt; \Delta ^2 f = f(x+1, y) + f(x-1, y) _ f(x, y-1) + f(x, y+1) + 4f(x, y)</div>
+<p>Nếu thích, chúng ta có thể tách chúng ra thành hai bộ lọc như phương pháp Sobel hoặc gom lại thành một. Nếu tách ra, nó sẽ có dạng như sau:</p>
+<div class="codehilite"><pre><span></span><code>kernelX = [1 -2 1]
+      [1 -2 1]
+      [1 -2 1]
+
+kernelY = [1   1  1]
+      [-2 -2 -2]
+      [1   1  1]
+</code></pre></div>
+
+<p>Và nếu gom lại, chúng sẽ có dạng như sau:</p>
+<div class="codehilite"><pre><span></span><code>kernel = [0  1 0]
+         [1 -4 1]
+         [0  1 0]
+</code></pre></div>
+
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">### Implement Laplacian Filter</span>
+
+<span class="n">laplacianKernel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> 
+                            <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+                            <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
+
+<span class="n">laplacianKernelX</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+                             <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> 
+                             <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">laplacianKernelY</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span>   <span class="mi">1</span><span class="p">,</span>  <span class="mi">1</span><span class="p">],</span>
+                              <span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">],</span>
+                              <span class="p">[</span><span class="mi">1</span><span class="p">,</span>   <span class="mi">1</span><span class="p">,</span>  <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">laplacianFiltered</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">laplacianKernel</span><span class="p">)</span>
+
+<span class="n">laplacianFilteredX</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">laplacianKernelX</span><span class="p">)</span>
+<span class="n">laplacianFilteredY</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">laplacianKernelY</span><span class="p">)</span>
+<span class="n">laplacianFiltered_</span> <span class="o">=</span> <span class="n">laplacianFilteredX</span> <span class="o">+</span> <span class="n">laplacianFilteredY</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">))</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Image&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">laplacianFiltered</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Laplacian Filter&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">laplacianFilteredX</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Laplacian Filter X&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">laplacianFilteredY</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Laplacian Filter Y&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">laplacianFiltered_</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Laplacian with 2 kernels&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/image-filters-p2/image-5.png" /></p>
+<h2 id="3-lời-kết">3. Lời kết</h2>
+<p>Trong 4 bộ lọc trên, bộ lọc Laplacian tìm ra được nhiều cạnh nhất tuy nhiên nó cũng bị noise nhiều nhất. Việc dùng bộ lọc nào sẽ tùy thuộc vào nhu cầu của các bạn. Nếu hình có ít nhiễu và muốn lọc ra được nhiều cạnh nhất thì bộ lọc Laplacian là tối ưu nhất, còn 3 bộ lọc kia có sự khác biệt không đáng kể do chúng đều dùng đạo hàm bậc 1.</p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://en.wikipedia.org/wiki/Roberts_cross">Roberts Cross - Wikipedia</a></p>
+<p>2. <a href="https://en.wikipedia.org/wiki/Prewitt_operator">Prewitt Operator - Wikipedia</a></p>
+<p>3. <a href="https://en.wikipedia.org/wiki/Sobel_operator">Sobel Operator - Wikipedia</a></p>
+<p>4. <a href="https://en.wikipedia.org/wiki/Discrete_Laplace_operator">Discrete Laplace Operator - Wikipedia</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 2". Le Hoang Viet's Homepage, April 2024. https://mikyx-1.github.io/blog/image-filters-p2.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024imagefiltersp2,
+  title   = {Giải thích và implement các bộ lọc trong xử lý ảnh - Phần 2},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {April},
+  url     = {https://mikyx-1.github.io/blog/image-filters-p2.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

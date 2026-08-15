@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code paper Very Deep Convolutional Networks for Large-Scale Image Recognition &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code paper Very Deep Convolutional Networks for Large-Scale Image Recognition</h2>
+<p class="date">2024-03-30 &middot; CNN, Architecture</p>
+
+<p>Xin chào các bạn!</p>
+<p>Trong bài post này mình sẽ giới thiệu về kiến trúc VGG, một trong những kiến trúc lâu đời nhất của mạng tích chập. Thật tình cờ, vào thời điểm viết bài blog này cũng là tròn 10 năm ngày ra mắt của mô hình này. Vậy, VGG có gì đặc biệt và có ảnh hưởng đến cách xây dựng các mô hình CNNs sau này như thế nào, chúng ta cùng khám phá nhé.</p>
+<h2 id="1-một-chút-background-về-các-tiền-bối-của-vgg">1. Một chút background về các tiền bối của VGG</h2>
+<p>Vào thời điểm 10 năm trước, có 2 mô hình CNNs rất nổi trước khi VGG được ra mắt đó là AlexNet (2012) được published trong paper "<em>ImageNet Classification with Deep Convolutional Neural Networks</em>" và LeNet của YanLeCun. Mô hình LeNet của YanLeCun là mô hình đầu tiên áp dụng thuật toán convolution vào mạng neural networks. Còn về AlexNet, mô hình này cực kì nổi tiếng mà hầu như ai trong lĩnh vực AI này cũng biết, nó đặc biệt ở chỗ dùng hàm ReLU activation function, sử dụng Dropout và Local Response Normalisation, và training với nhiều GPUs. </p>
+<p>Tuy nhiên, nếu nhìn qua về kiến trúc của cả 2 mạng này, ta sẽ thấy nó khá là nông với chỉ từ 5 đến 6 layers. Một điều nữa là cách sử dụng convolutional layers ở các mạng này là dùng kernel size và stride có kích cỡ lớn ở những layers đầu để thu nhỏ receptive field. </p>
+<figure style="text-align: center">
+<img src="https://pabloinsente.github.io/assets/post-8/alexnet.png" alt="Kiến trúc của LeNet-5 và AlexNet">
+<figcaption><b>Hình 1.1.</b> Kiến trúc của LeNet-5 và AlexNet</figcaption>
+</figure>
+
+<p>Như có thể thấy ở trên, mạng AlexNet có nhiều convolutional layers hơn so với LeNet tuy nhiên, AlexNet chỉ dừng lại ở 5 convolution layers và 3 fully connected layers. </p>
+<h2 id="2-cấu-trúc-của-vgg-network">2. Cấu trúc của VGG Network</h2>
+<p>Mạng VGG khác với các mô hình đi trước ở 2 điểm chính đó là sử dụng kernel size = 3 xuyên suốt toàn bộ kiến trúc và độ sâu của mô hình được tăng lên 16-19 layers thay vì chỉ vài layers như AlexNet và LeNet trước đó.</p>
+<p>Trong paper của mình, tác giả VGG đề xuất 6 options cho VGG đó là A, A-LRN, B, C, D, và E. Với từng options sẽ có thông số cụ thể như sau:</p>
+<ul>
+<li>A: 11 layers với với toàn bộ kernel size là 3x3.  </li>
+<li>A-LRN: Tương tự như A nhưng sử dụng Local Response Normalisation sau conv layer đầu tiên.  </li>
+<li>B: 13 layers với toàn bộ kernel size là 3x3.  </li>
+<li>C: 16 layers với toàn bộ kernel-size là 3x3 và 1x1 ở 3 khối cuối cùng.</li>
+<li>D: 16 layers với  toàn bộ kernel-size là 3x3.  </li>
+<li>E: 19 layers với toàn bộ kernel-size là 3x3. </li>
+</ul>
+<table style="width: 800px; margin: 0 auto;">  <thead>
+  <tr>
+    <th colspan="6" style="text-align: center">ConvNet Configuration</th>
+  </tr>
+</thead>
+
+<tbody>  <tr>
+    <td style="text-align: center">A</td>
+    <td style="text-align: center">A-LRN</td>
+    <td style="text-align: center">B</td>
+    <td style="text-align: center">C</td>
+    <td style="text-align: center">D</td>
+    <td style="text-align: center">E</td>
+  </tr>
+  <tr>
+    <td style="text-align: center">11 weight layers</td>
+    <td style="text-align: center">11 weight layers</td>
+    <td style="text-align: center">13 weight layers</td>
+    <td style="text-align: center">16 weight layers</td>
+    <td style="text-align: center">16 weight layers</td>
+    <td style="align: center">19 weight layers</td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center"> input (224x224 RGB image) </td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center">Conv3-64</td>
+    <td style="text-align: center">Conv3-64<br>
+        <span style="font-weight: bold;">LRN</span>  </td>
+    <td style="text-align: center">Conv3-64<br>
+    <span style="font-weight: bold">Conv3-64</span></td>
+    <td style="text-align: center">Conv3-64<br>
+    <span>Conv3-64</span></td>
+    <td style="text-align: center">Conv3-64<br>
+    <span>Conv3-64</span></td>
+    <td style="text-align: center">Conv3-64<br>
+    <span>Conv3-64</span></td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">MaxPool</td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center">Conv3-128</td>
+    <td style="text-align: center">Conv3-128</td>
+    <td style="text-align: center">Conv3-128<br>
+    <span style="font-weight: bold">Conv3-128</span></td>
+    <td style="text-align: center">Conv3-128<br>
+    <span>Conv3-128</span></td>
+    <td style="text-align: center">Conv3-128<br>
+    <span>Conv3-128</span></td>
+    <td style="text-align: center">Conv3-128<br>
+    <span>Conv3-128</span></td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">MaxPool</td>
+  </tr>
+
+
+  <tr>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span></td>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span></td>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span></td>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span><br><span style="font-weight: bold">Conv1-256</span></td>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span><br><span style="font-weight: bold">Conv3-256</span></td>
+    <td style="text-align: center">Conv3-256<br>
+    <span>Conv3-256</span><br><span>Conv3-256</span><br>
+    <span  style="font-weight: bold">Conv3-256</span></td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">MaxPool</td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span style="font-weight: bold">Conv1-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span style="font-weight: bold">Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span>Conv3-512</span><br>
+    <span  style="font-weight: bold">Conv3-512</span></td>
+  </tr> 
+
+  <tr>
+    <td colspan="6" style="text-align: center">MaxPool</td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span style="font-weight: bold">Conv1-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span style="font-weight: bold">Conv3-512</span></td>
+    <td style="text-align: center">Conv3-512<br>
+    <span>Conv3-512</span><br><span>Conv3-512</span><br>
+    <span  style="font-weight: bold">Conv3-512</span></td>
+  </tr> 
+
+  <tr>
+    <td colspan="6" style="text-align: center">MaxPool</td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">FC-4096</td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">FC-4096</td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">FC-1000</td>
+  </tr>
+
+  <tr>
+    <td colspan="6" style="text-align: center">Softmax</td>
+  </tr>
+
+</tbody>
+
+</table></div>
+
+<figure style="text-align: center">
+  <img src="https://www.researchgate.net/profile/Siti-Nurulain-Mohd-Rum/publication/350550608/figure/fig3/AS:1007769725452289@1617282434523/The_Difference_Architecture_between_AlexNet_and_VGG16_Models.png" alt="The Difference Architecture between AlexNet and VGG16 Models">
+  <figcaption style = "text-align: center" ><b>Hình 2.1.</b> Kiến trúc của AlexNet và VGG-16 (một option trong kiến trúc VGG)</figcaption>
+</figure>
+
+<p>So sánh giữa 2 kiến trúc như trên hình thì có thể thấy được rằng kiến trúc VGG sâu hơn hẳn so với AlexNet. </p>
+<p>Với kiến trúc sử dụng full conv 3x3 và 16 layers, tác giả Karen Simonyan &amp; Andrew Zisserman đã chứng minh được độ hiệu quả với việc giảnh giải nhất của cuộc thi ILSVRC 2014 cho task classification và giải nhi cho task localisation.</p>
+<h2 id="3-coding-time">3. Coding time</h2>
+<p>Giờ mình sẽ build kiến trúc này với Pytorch để chúng ta có thể nắm rõ hơn kiến trúc này nhé. </p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">nn</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Configuration for each option</span>
+<span class="n">cfg</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;A&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;A-LRN&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;B&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;C&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;D&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;E&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">],</span>
+<span class="p">}</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">VGG</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vgg_name</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">vgg_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cfg</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="s2">&quot;Architecture not included, please try again&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_names</span> <span class="o">=</span> <span class="n">cfg</span><span class="p">[</span><span class="n">vgg_name</span><span class="p">]</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_names</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="s2">&quot;LRN&quot;</span> <span class="ow">in</span> <span class="n">vgg_name</span><span class="p">:</span>
+            <span class="n">layers</span> <span class="o">+=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">LocalResponseNorm</span><span class="p">(</span><span class="mi">5</span><span class="p">)]</span>
+
+        <span class="n">layers</span> <span class="o">+=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()]</span>
+
+        <span class="n">last_num_layer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">ith</span><span class="p">,</span> <span class="n">layer_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_names</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">vgg_name</span> <span class="o">==</span> <span class="s1">&#39;C&#39;</span> <span class="ow">and</span> <span class="n">ith</span> <span class="o">&gt;=</span> <span class="mi">6</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_names</span><span class="p">[</span><span class="n">ith</span><span class="o">+</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;M&#39;</span><span class="p">:</span>
+                    <span class="n">layers</span> <span class="o">+=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">last_num_layer</span><span class="p">,</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">layers</span> <span class="o">+=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">last_num_layer</span><span class="p">,</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)]</span>
+
+                <span class="n">layers</span> <span class="o">+=</span> <span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()]</span>
+                <span class="n">last_num_layer</span> <span class="o">=</span> <span class="n">layer_name</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_avg_pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AdaptiveAvgPool2d</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">last_num_layer</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_avg_pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">modelA</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">modelALRN</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s2">&quot;A-LRN&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">modelB</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">modelC</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s2">&quot;C&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">modelD</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s2">&quot;D&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">modelE</span> <span class="o">=</span> <span class="n">VGG</span><span class="p">(</span><span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+    <span class="n">dummy</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model A output shape: </span><span class="si">{</span><span class="n">modelA</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model A-LRN output shape: </span><span class="si">{</span><span class="n">modelALRN</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model B output shape: </span><span class="si">{</span><span class="n">modelB</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model C output shape: </span><span class="si">{</span><span class="n">modelC</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model D output shape: </span><span class="si">{</span><span class="n">modelD</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model E output shape: </span><span class="si">{</span><span class="n">modelE</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Output của mô hình</p>
+<div class="codehilite"><pre><span></span><code>&gt; Model A output shape: torch.Size([1, 10])
+&gt; Model A-LRN output shape: torch.Size([1, 10])
+&gt; Model B output shape: torch.Size([1, 10])
+&gt; Model C output shape: torch.Size([1, 10])
+&gt; Model D output shape: torch.Size([1, 10])
+&gt; Model E output shape: torch.Size([1, 10])
+</code></pre></div>
+
+<h2 id="4-thảo-luận-optional">4. Thảo luận (Optional)</h2>
+<p>Trong các kiến trúc của AlexNet hay LeNet, tại sao họ không làm kiến trúc sâu hơn? Lý do chính bởi vì họ dùng kernel size và stride lớn nên đến khoảng layer 5 và 6 thì số lượng features đã rất nhỏ nên họ đã không thể cho thêm nhiều layers để extract features hơn nữa. </p>
+<p>Tại sao tác giả của VGG dùng 3x3 mà không phải là 5x5, 2x2, 4x4? Lý do chính họ sử dụng kernel size 3x3 là vì đây là kernel size nhỏ nhất có thể bắt được toàn bộ vùng xung quanh của một pixels (trái/phải, trên/dưới, và chính giữa). Hơn nữa việc dùng 2 kernel 3x3 tương tự với việc dùng conv 5x5 với ít số lượng parameters hơn, nhưng <strong>khối lượng tính toán sẽ nhiều hơn</strong> (tác giả không nhắc đến điều này trong paper).</p>
+<h2 id="5-kết-luận">5. Kết luận</h2>
+<p>Mô hình VGG đã làm thay đổi cách các AI researchers/scientists thiết kế các kiến trúc CNN, với việc mô hình hiện đại ngày nay đa số dùng kernel size 3x3, và có độ sâu lớn hơn rất nhiều so với các mô hình ra mắt trước VGG. Vì vậy, ta có thể nói VGG là một pioneer model.</p>
+<p>Cảm ơn bạn đã đọc đến cuối bài, hãy ủng hộ mình bằng cách tiếp tục theo dõi và feedback nếu thấy chỗ nào chưa hợp lý nhé. </p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://arxiv.org/pdf/1409.1556.pdf">Very Deep Convolutional Networks for Large-Scale Image</a><br />
+2. <a href="https://pabloinsente.github.io/the-convolutional-network">The Convolutional Neural Network - Theory and Implementation of LeNet-5 and AlexNet</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code paper Very Deep Convolutional Networks for Large-Scale Image Recognition". Le Hoang Viet's Homepage, March 2024. https://mikyx-1.github.io/blog/vgg.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024vgg,
+  title   = {Giải thích và code paper Very Deep Convolutional Networks for Large-Scale Image Recognition},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {March},
+  url     = {https://mikyx-1.github.io/blog/vgg.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>

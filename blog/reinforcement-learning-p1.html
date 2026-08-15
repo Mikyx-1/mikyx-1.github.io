@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reinforcement Learning - Phần 1 &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Reinforcement Learning - Phần 1</h2>
+<p class="date">2024-10-03 &middot; Reinforcement Learning</p>
+
+<h2 id="1-giới-thiệu-về-reinforcement-learning">1. Giới thiệu về reinforcement learning</h2>
+<p>Reinforcement learning là một nhánh đặc biệt của học máy và <strong>không thuộc cả 2 loại supervised learning và unsupervised learning</strong>.  Lý do nó không phải là supervised learning và unsupervised learning là vì phương pháp này không cần đến labels và không được thiết kế để tìm ra cấu trúc ẩn (hidden structure) của dữ liệu. Đây là một giải thuật học bằng trials-and-errors. Trong RL, chúng ta sẽ huấn luyện agent học cách hành động trong một môi trường (environment), ta chỉ cần đặt mục tiêu và agent sẽ <strong>tìm ra phương án để đạt được mục tiêu đó</strong>.  </p>
+<figure style="text-align: center">
+<img src="https://lilianweng.github.io/posts/2018-02-19-rl-overview/RL_illustration.png" alt="">
+</figure>
+
+<p>Ví dụ, trong cờ tướng chúng ta biết thế nào là thắng nhưng còn <strong>làm sao để thắng</strong> thì vẫn là ẩn số (LoL). Tương tự với Cờ vua, quay rubic, chứng khoán, Liên Minh Huyền Thoại, Fifa, đột kích, ..., chúng ta đều biết như thế nào là thắng hoặc hoàn thành nhiệm vụ, tuy nhiên con đường đến đó chúng ta chưa biết. Và giải thuật reinforcement learning sẽ giúp tìm ra lời giải cho bài toán <strong>làm sao</strong> này.  </p>
+<h2 id="2-lịch-sử-của-reinforcement-learning">2. Lịch sử của reinforcement learning</h2>
+<p>Reinforcement Learning (RL) bắt nguồn từ lý thuyết hành vi trong tâm lý học, với khái niệm thử và sai và phần thưởng từ thập niên 1950. Những nhà tiên phong như Richard Bellman đã phát triển các khái niệm nền tảng như Dynamic Programming và Bellman Equation, đặt nền móng cho lý thuyết RL. Trong những năm 1980, Watkins giới thiệu Q-learning, một phương pháp nổi tiếng giúp tác nhân học cách tối ưu hóa hành động mà không cần biết trước mô hình môi trường.</p>
+<p>Tuy nhiên, RL chỉ thực sự bùng nổ vào đầu thập niên 2010, khi DeepMind phát triển Deep Q Networks (DQN), kết hợp RL với mạng CNN, cho phép agent học qua hình ảnh và đánh bại con người trong trò chơi Atari. Sau đó, thành công của các hệ thống như AlphaGo, OpenAI Five, ChatGPT, và nhiều ứng dụng trong tự động hóa đã đưa RL lên tầm cao mới, trở thành lĩnh vực nổi bật trong AI.</p>
+<figure style="text-align: center">
+<img src="https://s.yimg.com/ny/api/res/1.2/PWLMLHYqmFgzGn_R9VdIzA--/YXBwaWQ9aGlnaGxhbmRlcjt3PTk2MDtoPTU0MDtjZj13ZWJw/https://o.aolcdn.com/hss/storage/midas/64f5c0fa4cd3cdaee7906927a26f3b29/203536496/youtu.be-qUAmTYHEyM8+%287%29-1400.jpg">
+<figcaption><b>Hình 1.2.</b> AlphaGo đánh bại kỳ thủ cờ vây số 1 thế giới Lee Sedol </figcaption>
+</figure>
+
+<h2 id="3-khái-niệm-và-thuật-ngữ-trong-rl">3. Khái niệm và thuật ngữ trong RL</h2>
+<p>Trong phần này, mình sẽ giải thích các thuật ngữ được dùng thông dụng nhất trong RL như states, actions, policies, ...</p>
+<h3 id="31-states-and-observations">3.1. States and observations</h3>
+<p>Một trạng thái (state) <span class="math">s</span> là mô tả hoàn chỉnh về trạng thái của agent trong môi trường. Một quan sát (observation) <span class="math">o</span> là mô tả một phần của trạng thái, có thể bỏ qua một số thông tin. Tuy nhiên, trong nhiều tài liệu, họ vẫn sử dụng state và observation một cách đồng nghĩa. </p>
+<p>Trong deep RL, chúng ta hầu như luôn biểu diễn các trạng thái và quan sát bằng một vector giá trị thực, ma trận hoặc tensor bậc cao hơn. Ví dụ, một quan sát hình ảnh có thể được biểu diễn bằng ma trận RGB của các giá trị pixel; trạng thái của một robot có thể được biểu diễn bởi các góc khớp và vận tốc của nó.</p>
+<p>Khi agent có thể quan sát toàn bộ trạng thái của môi trường, chúng ta nói rằng môi trường được quan sát đầy đủ (fully observed). Khi agent chỉ có thể thấy một phần quan sát, chúng ta nói rằng môi trường được quan sát một phần (partially observed).</p>
+<h3 id="32-action-spaces">3.2. Action spaces</h3>
+<p>Các môi trường khác nhau cho phép các loại hành động khác nhau. Tập hợp tất cả các hành động hợp lệ trong một môi trường nhất định thường được gọi là action space. Một số môi trường, như Atari và Go, có không gian hành động rời rạc (discrete action space), nơi chỉ có một số lượng hữu hạn các nước đi có sẵn cho agent. Các môi trường khác, như khi tác nhân điều khiển robot trong thế giới vật lý, có không gian hành động liên tục (continuous action space). Trong các không gian liên tục, các hành động là các vector giá trị thực.</p>
+<p>Sự phân biệt này có những hệ quả khá sâu sắc đối với các phương pháp trong deep RL. Một số họ thuật toán chỉ có thể được áp dụng trực tiếp trong một trường hợp, và sẽ phải được sửa đổi đáng kể để áp dụng cho trường hợp khác.</p>
+<h3 id="33-policies">3.3. Policies</h3>
+<p>Policy là quy luật mà agent dùng nó để quyết định hành động. Nó có thể là cứng (deterministic) và được kí hiệu là <span class="math">\mu</span>,</p>
+<div class="math math-display">a_t = \mu(s_t)</div>
+<p>hoặc được lấy mẫu từ một distribution (stochastic) và được kí hiệu bằng <span class="math">\pi</span>:</p>
+<div class="math math-display">a_t \sim \pi(\cdot|s_t)</div>
+<p>Bởi vì policy như là não của agent nên cũng sẽ có nhiều blogs và papers sử dụng agent và policy với ý nghĩa như nhau. </p>
+<p>Với deep RL, các policy được parameterised nên chúng sẽ có notation như sau:</p>
+<div class="math math-display">a_t = \mu_\theta(s_t)</div>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Deterministic, for demonstration only</span>
+<span class="n">mu_net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">obs_dim</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">(),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">(),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+            <span class="p">)</span>
+
+<span class="n">action</span> <span class="o">=</span> <span class="n">mu_net</span><span class="p">(</span><span class="n">state</span><span class="p">)</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;At state: </span><span class="si">{</span><span class="n">state</span><span class="si">}</span><span class="s2">, Take action: </span><span class="si">{</span><span class="n">action</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="math math-display">a_t \sim \pi_\theta(\cdot | s_t)</div>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Stochastic</span>
+<span class="n">pi_net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">obs_dim</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">(),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">(),</span>
+              <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+            <span class="p">)</span>
+<span class="n">action_distribution</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">pi_net</span><span class="p">(</span><span class="n">state</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1"># Sample from the categorical distribution</span>
+<span class="n">sampled_action</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">multinomial</span><span class="p">(</span><span class="n">action_distribution</span><span class="p">,</span> <span class="n">num_samples</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;At state: </span><span class="si">{</span><span class="n">state</span><span class="si">}</span><span class="s2">, Take action: </span><span class="si">{</span><span class="n">sampled_action</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="34-trajectories">3.4. Trajectories</h3>
+<p>Trajectory <span class="math">\tau</span> là một chuỗi các states và actions của agent trong environment. </p>
+<div class="math math-display">\tau = (s_0, a_0, s_1, a_1, ...)</div>
+<p><span class="math math-display">s_0</span> 
+là trạng thái ban đầu của agent trong environment, thường được kí hiệu bằng <span class="math">\rho_0</span>:</p>
+<div class="math math-display">s_0 \sim \rho_0(\cdot).</div>
+<p>Ở mỗi state bất kì, agent sẽ chọn một hành động và sau khi thực hiện hành động này thì môi trường sẽ chuyển sang một state mới và quá trình này được gọi là <em>state transition</em>. State transition được quyết định bởi môi trường, nó có thể được biểu diễn bằng hàm deterministic, </p>
+<div class="math math-display">s_{t+1} = f(s_t, a_t)</div>
+<p>hoặc stochastic, </p>
+<div class="math math-display">s_{t+1} \sim P(\cdot|s_t, a_t)</div>
+<ul>
+<li>Note: Trajectories trong một vài tài liệu hoặc cách implementations, chúng còn được gọi là <strong>episodes</strong> hoặc <strong>rollouts</strong>. </li>
+</ul>
+<h3 id="35-reward--returns">3.5. Reward &amp; Returns</h3>
+<p>Reward <span class="math">R</span> là một trong những yếu tố quan trọng nhất khi bạn tự thiết kế môi trường cho agent. Nó phụ thuộc vào 3 yếu tố: trạng thái hiện tại, hành động của agent, và trạng thái tiếp theo, </p>
+<div class="math math-display">r_t = R(s_t, a_t, s_{t+1})</div>
+<p>Mục tiêu của agent là làm sao để đạt được tổng tích lũy phần thưởng lớn nhất trong một trajectory. Tổng tích lũy phần thưởng này trong RL được gọi là <em>return</em> và thông thường chúng có 2 cách biểu diễn. Một là <strong>finite-horizon undiscounted return</strong>, </p>
+<div class="math math-display">R(\tau) = \sum_{t=0}^{T}r_t</div>
+<p>hai là <strong>infinite-horizon discounted return</strong></p>
+<div class="math math-display">\qquad \qquad \qquad \qquad \begin{aligned}
+R(\tau) = \sum_{t=0}^{\infty} \gamma^tr_t \quad \quad \text{Với } \gamma \in (0, 1)
+\end{aligned}</div>
+<h3 id="36-model-free-và-model-based">3.6. Model-free và Model-based</h3>
+<p>Nếu bạn nhìn vào đầu mục và nghĩ tới 2 trường hợp dùng không dùng và dùng deep learning cho agent thì chưa đúng. Model-free và model-based dùng để ám chỉ liệu bài toán có hàm để biểu diễn environment hay chưa. </p>
+<p>Với model-free, agent không có hoặc không học mô hình của môi trường. Agent trong case model-free này được thả vào môi trường và <strong>nhận về tín hiệu feedback từ môi trường</strong>. Ví dụ trong trường hợp đi thi, chúng ta không biết đề thi sẽ như thế nào và cách duy nhất để biết là thi 1 lần, 2 lần, 3 lần và dần dần sẽ rút ra kinh nghiệm. </p>
+<p>Ngược lại, với model-based thì agent sẽ học hoặc đã có một mô hình mô tả được môi trường và biết được môi trường sẽ trả cho nó feedback gì khi nó thực hiện một hành động cụ thể. Với ví dụ trên, thì agent đã biết được đề thi sẽ hỏi những câu gì, dạng nào, ... </p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><strong>Phương pháp</strong></th>
+<th><strong>Điểm mạnh</strong></th>
+<th><strong>Điểm yếu</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Model-Free RL</strong></td>
+<td>- Đơn giản hơn để implement.</td>
+<td>- Cần rất, rất nhiều trials-and-errors.</td>
+</tr>
+<tr>
+<td></td>
+<td>- Không yêu cầu mô hình của môi trường.</td>
+<td>- Không thể lập kế hoạch dài hạn vì không biết trước các chuyển đổi trạng thái.</td>
+</tr>
+<tr>
+<td></td>
+<td>- Thường hiệu quả trong môi trường phức tạp và khó mô hình hóa.</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Model-Based RL</strong></td>
+<td>- Hiệu quả về mẫu, có thể lập kế hoạch bằng cách mô phỏng các bước trong tương lai.</td>
+<td>- Cần một mô hình chính xác của môi trường, điều này khó học và tốn kém.</td>
+</tr>
+<tr>
+<td></td>
+<td>- Tốt hơn trong việc planning.</td>
+<td>- Phức tạp hơn để triển khai do yêu cầu mô hình hóa môi trường.</td>
+</tr>
+<tr>
+<td></td>
+<td>- Có thể "tưởng tượng" các kết quả tương lai mà không cần tương tác trực tiếp</td>
+<td>- Nếu mô hình không chính xác, có thể dẫn đến các quyết định sai lầm (Sai 1 ly, đi rất nhiều công sức và tài nguyên).</td>
+</tr>
+</tbody>
+</table></div>
+<p>Với Model-based RL, chúng thường được sử dụng trong các mô phỏng hoặc games. Trong các vấn đề thực tế như áp dụng vào chứng khoán, xe tự hành thì phương pháp model-free chủ yếu được sử dụng. Và vì model-free là cách mà được sử dụng phổ biến nhất nên trong đa số các papers thì hướng nghiên cứu này có số lượng publications cao hơn rất nhiều so với model-based. </p>
+<h2 id="4-kết-luận">4. Kết luận</h2>
+<p>Trong bài viết trên, mình đã giới thiệu về reinforcement learning, ứng dụng, và những thuật ngữ quan trọng trong lĩnh vực này. Ở các phần tiếp theo, mình sẽ giới thiệu và implement về các giải thuật liên quan. Hy vọng các bạn cảm thấy hữu ích. </p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://spinningup.openai.com/en/latest/spinningup/rl_intro.html">Part 1: Key Concepts in RL - OpenAI Spinning Up</a><br />
+2. <a href="https://lilianweng.github.io/posts/2018-02-19-rl-overview/">A (Long) Peek into Reinforcement Learning</a><br />
+3. Reinforcement Learning An Introduction by Richard S. Sutton &amp; Andrew G. Barto</p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Reinforcement Learning - Phần 1". Le Hoang Viet's Homepage, October 2024. https://mikyx-1.github.io/blog/reinforcement-learning-p1.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024reinforcementlearningp1,
+  title   = {Reinforcement Learning - Phần 1},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {October},
+  url     = {https://mikyx-1.github.io/blog/reinforcement-learning-p1.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

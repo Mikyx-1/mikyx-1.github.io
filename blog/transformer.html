@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code Transformers &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code Transformers</h2>
+<p class="date">2024-03-21 &middot; Transformers, Deep Learning</p>
+
+<p>Xin chào các bạn!</p>
+<p>Trong bài post này, mình sẽ giới thiệu về kiến trúc transformers. Đây được xem là một trong những model có tính cách mạng nhất trong deep learning vì nó đã tạo tiền đề cho sự ra đời của các mô hình ngôn ngữ lớn hay các mô hình SOTA cho các task như speech recognition, computer vision, ...</p>
+<h2 id="1-một-chút-về-lịch-sử-của-transformers">1. Một chút về lịch sử của transformers</h2>
+<p>Mô hình này được ra mắt nhằm thay thế cho kiến trúc Recurrent neural networks (RNNs), vốn đã được ra mắt vào những năm 90. Sơ lược thì kiến trúc recurrent này được thiết kế ra nhằm xử lý các loại thông tin có thứ tự như text, speech. Tuy nhiên, kiến trúc này có nhược điểm là vấn đề về  <strong>exploding/vanishing gradient</strong> khi training nên nó không thể xử lý một đoạn thông tin quá dài. Vì những lý do đó mà Large language models không tồn tại trước khi transformer được ra mắt. </p>
+<p>Đến năm 2014, một nhóm nghiên cứu ở Google đã nghiên cứu những phương pháp để khắc phục vấn đề trên của RNNs và đề xuất kiến trúc transformers. Chỉ sau 10 năm ra mắt, những thành tựu đạt được từ kiến trúc transformers nhiều không xuể với sự ra mắt của các mô hình ngôn ngữ lớn như ChatGPT, Llama3, Segment Anything, ...</p>
+<h2 id="2-ý-tưởng-chính-của-transformers">2. Ý tưởng chính của transformers</h2>
+<p>Ý tưởng chính của Transformers là cách sử dụng thông minh và khéo léo các phép tính toán song song (như nhân ma trận, ánh xạ, ...) để thay thế các tính toán kiểu one-by-one của RNNs nhằm giải quyết vấn đề <strong>exploding/vanishing gradient</strong>.</p>
+<h2 id="21-positional-embedding">2.1. Positional embedding</h2>
+<p>Transformers xử lý text một cách song song thay vì tuần tự như kiểu RNN, tức là nó sẽ cho nguyên cả đoạn text vào input cho 1 lần xử lý thay vì chia ra thành các timestep. Và vì trong các tín hiệu tuần tự thì thứ tự là một thông tin rất quan trọng. Ví dụ như "xin chào bạn" và nếu ta cho nó một thứ tự khác thì sẽ được câu như "chào xin bạn", "bạn xin chào". Như vậy, <strong>thứ tự có tính chất rất quan trọng để giữ lại được ngữ nghĩa của input</strong>. Khi xử lý tuần tự như kiểu RNNs thì ta không cần thông tin thứ tự vì timestep vốn đã là thứ tự rồi. Tuy nhiên đối với mô hình xử lý cả câu, cả đoạn một lúc như transformers thì phải có một thông tin thứ tự được chèn thêm vào để giúp mô hình này có thể biết được vị trí chính xác của từng từ trong input. Ashish Vaswani (1st author của paper) đã dùng một phương pháp để thực hiện việc này có tên là <strong>positional embedding</strong>. </p>
+<ul>
+<li><strong>Công thức toán học của Positional Embedding</strong></li>
+</ul>
+<div class="math math-display">PE_{(pos, 2i)} = sin(\frac{pos}{10000^{\frac{2i}{d_{model}}}})</div>
+<div class="math math-display">PE_{(pos, 2i + 1)} = cos(\frac{pos}{10000^{\frac{2i}{d_{model}}}})</div>
+<p>Với,</p>
+<div class="math math-display">pos: \text{Vị trí của phần từ trong input. Ex: 1, 2, ..., sequence length}</div>
+<div class="math math-display">i: \text{Dimension thứ i của phần từ trong input: Ex: 1, 2, ...,} d_{model}</div>
+<div class="math math-display">d_{model}: \text{Số dimension của input. Ex: 128 or 256 or 512 or any number}</div>
+<h2 id="22-self-attention">2.2. Self-Attention</h2>
+<p>Trong các dữ liệu tuần tự như kiểu văn bản thì ngữ nghĩa của một từ ngoài phụ thuộc vào chính nó mà còn phụ thuộc vào các element đứng trước và sau. Ví dụ trong 2 câu sau "book a room" và "book in the room" thì từ book có 2 nghĩa hoàn toàn khác nhau. Để có thể phân biệt được từ "book" trong câu có nghĩa là <em>đặt</em> hay là <em>quyển sách</em>, ta phải dựa vào các từ kế bên trái và phải để có thể biết được. Và vì cần một cơ chế để có thể giúp nhận ra nghĩa của từ hiện tại dựa vào các từ bên cạnh, tác giá đã đề xuất cơ chế <strong>self-attention</strong>. </p>
+<p>Một cách ngắn gọn, cơ chế self-attention giúp xác định ngữ nghĩa của 1 từ trong câu rõ ràng hơn. Self-attention cho biết sự "liên quan" của từ hiện tại với các từ còn lại trong input. Ví dụ self-attention của một input là text sẽ có dạng như sau:</p>
+<figure style="text-align: center">
+<img src="https://1.bp.blogspot.com/-AVGK0ApREtk/WaiAuzddKVI/AAAAAAAAB_A/WPV5ropBU-cxrcMpqJBFHg73K9NX4vywwCLcBGAs/s1600/image2.png" alt="Kiến trúc của LeNet-5 và AlexNet">
+<figcaption><b>Hình 2.2.1.</b> Ví dụ minh họa về self-attention - Google</figcaption>
+</figure>
+
+<p>Ở câu trong hình trên, chỉ khác nhau ở 2 từ ở cuối câu là "tired" và "wide". Nếu từ cuối cùng là "tired" thì từ "it" có attention score cao nhất (đường càng đậm thì có giá trị càng lớn) ở từ animal (ám chỉ rằng nó đang nói về animal) trong khi đó nếu từ cuối cùng là "wide" thì từ "it" sẽ có attention score cao nhất ở từ "street" nhằm ám chỉ rằng từ này đang có liên quan nhiều với từ "street" trong câu. </p>
+<p>Nhờ có kiến trúc self-attention này, các ngữ nghĩa của 1 từ và các thông tin xung quanh được tích hợp lại một cách chặt chẽ đóng vai trò chính trong sự vượt trội của mô hình transformers so với các mô hình tiền nhiệm nó. </p>
+<ul>
+<li><strong>Công thức toán học của Self-Attention</strong></li>
+</ul>
+<div class="math math-display">Attention(Q, K, V) = softmax(\frac{QK^{T}}{\sqrt d_k})V</div>
+<p>Trong đó,</p>
+<div class="math math-display">Q: Query, \R ^ {N \times d_k}</div>
+<div class="math math-display">K: Key, \R ^ {N \times d_k}</div>
+<div class="math math-display">V: Value, \R ^ {N \times d_v }</div>
+<div class="math math-display">d_k: \text{Key dimension}</div>
+<h2 id="23-multi-head-attention">2.3. Multi Head Attention</h2>
+<p>Trong paper của mình, tác giả Ashish Vaswani cho rằng việc dùng thêm Linear layer để ánh xạ nó lên một không gian có h x d_embedding rồi thực hiện self-attention trên h x d_embedding đó sẽ "<em>jointly attend to information from different representation
+subspaces at different positions</em>". Mình không biết dịch đúng nghĩa đoạn trên như thế nào, nhưng ý tác giả muốn truyền tải rằng việc này sẽ giúp thông tin trong input kết nối với nhau ở nhiều chiều không gian hơn.</p>
+<p>Với Multi Head Attention, tác giả dùng nhiều khối self-attention rồi ghép nối kết quả lại với nhau. Cụ thể, tác giả sẽ dùng <em>h</em> khối self-attention cho Q, K, V và sau đó concat kết quả cuối cùng. </p>
+<figure style="text-align: center">
+<img src="https://media.geeksforgeeks.org/wp-content/uploads/20240110170625/Scaled-Dot-Product-and-Multi-Head-Attentions.webp" alt="">
+<figcaption><b>Hình 2.3.1.</b> Khối self-attention (trái) và multi head attention (phải) </figcaption>
+</figure>
+
+<ul>
+<li><strong>Công thức toán học của Multi Head Attention</strong></li>
+</ul>
+<div class="math math-display">MultiHead(Q, K, V) = Concat(head_1, ..., head_h)W^O</div>
+<p>Với, </p>
+<div class="math math-display">head_i = Self Attention(QW_i^Q, KW_i^K, VW_i^V)</div>
+<p>Trong đó,</p>
+<div class="math math-display">W_i^Q \in \R^{d_{model} \times d_k}, W_i^K \in \R ^{d_{model} \times d_k}, W_i^V \in \R ^{d_{model} \times d_v}, W^O \in \R^{hd_v \times d_{model}}</div>
+<h2 id="3-xây-dựng-và-train-transformer-với-pytorch">3. Xây dựng và train transformer với Pytorch</h2>
+<p>Trong phần này, mình sẽ xây dựng kiến trúc transformer from scratch và train nó với 2 tasks để có thể giúp các bạn hiểu hơn về chi tiết về mô hình cũng như cách hoạt động của transformers trong NLP. </p>
+<h2 id="31-xây-dựng-mô-hình-transformer">3.1. Xây dựng mô hình transformer</h2>
+<p>Kiến trúc tổng quan của transformers bao gồm 2 phần: <strong>Encoder</strong> và <strong>Decoder</strong>. </p>
+<p><strong>Nói thêm đoạn này: Autoregressive, encoder meaning and decoder meaning</strong></p>
+<figure style="text-align: center">
+<img src="https://machinelearningmastery.com/wp-content/uploads/2021/08/attention_research_1.png" alt="">
+<figcaption><b>Hình 3.1.1.</b> Kiến trúc tổng quan của mô hình Transformer - Paper </figcaption>
+</figure>
+
+<h2 id="311-input-encoding">3.1.1. Input Encoding</h2>
+<p>Với input embedding, ta cần xây dựng 2 khối chính là semantic embedding và positional embedding. </p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SemanticEmbedding</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> 
+                <span class="n">embedding_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedder</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_sequence</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedder</span><span class="p">[</span><span class="n">input_sequence</span><span class="p">]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PositionalEncoding</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d_model</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> <span class="n">max_len</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="n">pe</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">max_len</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_len</span><span class="p">,</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">div_term</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">*</span><span class="p">(</span><span class="o">-</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">10000.0</span><span class="p">)</span><span class="o">*</span><span class="mf">2.</span><span class="o">/</span><span class="n">d_model</span><span class="p">))</span>
+
+        <span class="n">pe</span><span class="p">[:,</span> <span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">position</span><span class="o">*</span><span class="n">div_term</span><span class="p">)</span>
+        <span class="n">pe</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">::</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">position</span><span class="o">*</span><span class="n">div_term</span><span class="p">)</span>
+
+        <span class="n">pe</span> <span class="o">=</span> <span class="n">pe</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s2">&quot;pe&quot;</span><span class="p">,</span> <span class="n">pe</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pe</span><span class="p">[:,</span> <span class="p">:</span><span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="p">:]</span>
+</code></pre></div>
+
+<h2 id="312-multi-head-attention">3.1.2. Multi-Head Attention</h2>
+<p>Ở phần này, chúng ta sẽ code khối Multi-Head Attention. </p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Trước tiên là khối self-attention</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SelfAttention</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">key</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">dropout</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+
+        <span class="n">d_k</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">attention_score</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;nqhd, nkhd -&gt; nhqk&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">query</span><span class="p">,</span> <span class="n">key</span><span class="p">])</span><span class="o">/</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">d_k</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attention_score</span> <span class="o">=</span> <span class="n">attention_score</span><span class="o">.</span><span class="n">masked_fill</span><span class="p">(</span><span class="n">mask</span><span class="o">==</span><span class="mi">0</span><span class="p">,</span> <span class="mf">1e-9</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dropout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attention_score</span> <span class="o">=</span> <span class="n">dropout</span><span class="p">(</span><span class="n">attention_score</span><span class="p">)</span>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;nhqk, nvhd -&gt; nvhd&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">attention_score</span><span class="p">,</span> <span class="n">value</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">output</span>
+
+<span class="c1"># Tiếp theo là khối Multi-Head Attention</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MultiHeadAttention</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">d_model</span><span class="o">%</span><span class="n">h</span> <span class="o">==</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">d_k</span> <span class="o">=</span> <span class="n">d_model</span><span class="o">//</span><span class="n">h</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">=</span> <span class="n">h</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_projector</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key_projector</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value_projector</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">attention</span> <span class="o">=</span> <span class="n">SelfAttention</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout_rate</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                <span class="n">query</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">key</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+                <span class="n">mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">projected_query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">query_projector</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_k</span><span class="p">)</span>
+        <span class="n">projected_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_projector</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_k</span><span class="p">)</span>
+        <span class="n">projected_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value_projector</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_k</span><span class="p">)</span>
+
+        <span class="n">mha_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">attention</span><span class="p">(</span><span class="n">projected_query</span><span class="p">,</span> <span class="n">projected_key</span><span class="p">,</span> <span class="n">projected_value</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">d_k</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_linear</span><span class="p">(</span><span class="n">mha_output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mha_output</span>
+</code></pre></div>
+
+<p>Sau khi code xong khối self-attention và self-attention, chúng ta sẽ test thử xem liệu output của các khối này có giống như chúng ta mong muốn không.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">query</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+
+<span class="n">key</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+
+<span class="n">value</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+
+<span class="n">multi_head_attention</span> <span class="o">=</span> <span class="n">MultiHeadAttention</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">multi_head_attention</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>torch.Size<span class="o">([</span><span class="m">1</span>,<span class="w"> </span><span class="m">15</span>,<span class="w"> </span><span class="m">256</span><span class="o">])</span>
+</code></pre></div>
+
+<p>Qua hình dạng của output, với output có dimension giống với kích thước của value tức là về shape nó đã đúng. Vì vậy, chúng ta sẽ qua bước tiếp theo là xây dựng bộ encoder và decoder. </p>
+<h2 id="313-encoder">3.1.3. Encoder</h2>
+<p>Khối encoder được xây dựng theo kiến trúc như bên trái hình 3.1.1. Khối này sẽ bao gồm 5 layers: Input Embedding, Multi-Head Attention, Add&amp;Norm Layers, Feed Forward, Add&amp;Norm Layer. </p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TransformerEncoder</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> 
+                 <span class="n">num_heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> 
+                 <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span> 
+                 <span class="n">max_seq_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span> 
+                 <span class="n">FF_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">semantic_encoder</span> <span class="o">=</span> <span class="n">SemanticEmbedding</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positional_encoder</span> <span class="o">=</span> <span class="n">PositionalEmbedding</span><span class="p">(</span><span class="n">d_model</span> <span class="o">=</span> <span class="n">embedding_dim</span><span class="p">,</span> <span class="n">max_len</span><span class="o">=</span><span class="n">max_seq_length</span><span class="p">)</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm_1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embedding_dim</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">feed_forward</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">embedding_dim</span><span class="p">,</span> <span class="n">FF_dim</span><span class="p">),</span> 
+                                          <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span> 
+                                          <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">FF_dim</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm_2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embedding_dim</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">multi_head_attention</span> <span class="o">=</span> <span class="n">MultiHeadAttention</span><span class="p">(</span><span class="n">h</span> <span class="o">=</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">d_model</span> <span class="o">=</span> <span class="n">embedding_dim</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">semantic_encoder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">positional_encoder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm_1</span><span class="p">(</span> <span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">multi_head_attention</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm_2</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">feed_forward</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">x</span>
+</code></pre></div>
+
+<p>Sau khi build xong khối encoder, chúng ta sẽ thử xem output shape có giống như chúng ta mong đợi không nhé.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+
+    <span class="n">EMBEDDING_DIM</span> <span class="o">=</span> <span class="mi">256</span>
+    <span class="n">NUM_HEADS</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">VOCAB_SIZE</span> <span class="o">=</span> <span class="mi">10000</span>
+    <span class="n">MAX_SEQ_LENGTH</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">FF_DIM</span> <span class="o">=</span> <span class="mi">1024</span>
+
+    <span class="n">encoder</span> <span class="o">=</span> <span class="n">TransformerEncoder</span><span class="p">(</span>
+        <span class="n">embedding_dim</span><span class="o">=</span><span class="n">EMBEDDING_DIM</span><span class="p">,</span>
+        <span class="n">num_heads</span><span class="o">=</span><span class="n">NUM_HEADS</span><span class="p">,</span>
+        <span class="n">vocab_size</span><span class="o">=</span><span class="n">VOCAB_SIZE</span><span class="p">,</span>
+        <span class="n">max_seq_length</span><span class="o">=</span><span class="n">MAX_SEQ_LENGTH</span><span class="p">,</span>
+        <span class="n">FF_dim</span><span class="o">=</span><span class="n">FF_DIM</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">sample</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">MAX_SEQ_LENGTH</span><span class="p">)</span>
+    <span class="n">sample</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="n">MAX_SEQ_LENGTH</span><span class="p">))</span> <span class="o">*</span> <span class="p">(</span><span class="n">MAX_SEQ_LENGTH</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+
+    <span class="n">encoded_information</span> <span class="o">=</span> <span class="n">encoder</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sample: </span><span class="si">{</span><span class="n">sample</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Encoded information: </span><span class="si">{</span><span class="n">encoded_information</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Encoded information shape: </span><span class="si">{</span><span class="n">encoded_information</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="314-decoder">3.1.4. Decoder</h2>
+<h2 id="32-huấn-luyện-và-chạy-mô-hình-transformer-cho-classification-task">3.2. Huấn luyện và chạy mô hình transformer cho classification task</h2>
+<p>Cho classification task, chúng ta chỉ cần mỗi khối encoder của transformer vì đây là task không cần sinh ra output mới. Với classification task, chúng ta chỉ cần lấy feature được trích ra từ transformer encoder và đưa qua một lớp fully connected nữa để làm output cho classification.</p>
+<p>Ở ví dụ này, mình sẽ dùng data từ tập Disaster Tweets từ Kaggle. </p>
+<ul>
+<li><strong>Step 1</strong>: Chuẩn bị data</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CreateTextClassificationDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">vocabulary_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">oov_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&lt;OOV&gt;&quot;</span><span class="p">,</span>
+        <span class="n">padding_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;post&quot;</span><span class="p">,</span>
+        <span class="n">truncating_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;post&quot;</span><span class="p">,</span>
+        <span class="n">max_len</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sentences</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vocabulary_size</span> <span class="o">=</span> <span class="n">vocabulary_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">oov_token</span> <span class="o">=</span> <span class="n">oov_token</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">padding_type</span> <span class="o">=</span> <span class="n">padding_type</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">truncating_type</span> <span class="o">=</span> <span class="n">truncating_type</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_len</span> <span class="o">=</span> <span class="n">max_len</span>
+
+        <span class="c1"># Create vectorised tokens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_tokenizer</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vectorised_tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_vectorised_tokens</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sentences</span><span class="p">)</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_tokenizer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">Tokenizer</span><span class="p">(</span>
+            <span class="n">num_words</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">vocabulary_size</span><span class="p">,</span> <span class="n">oov_token</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">oov_token</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">fit_on_texts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sentences</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_tokenize_texts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+        <span class="n">tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">texts_to_sequences</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tokens</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_vectorise_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_len</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">max_len</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">])</span>
+
+        <span class="n">padded</span> <span class="o">=</span> <span class="n">pad_sequences</span><span class="p">(</span>
+            <span class="n">tokens</span><span class="p">,</span>
+            <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">padding_type</span><span class="p">,</span>
+            <span class="n">truncating</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">truncating_type</span><span class="p">,</span>
+            <span class="n">maxlen</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_len</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">padded</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_vectorised_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentences</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">:</span>
+        <span class="n">tokenised</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tokenize_texts</span><span class="p">(</span><span class="n">sentences</span><span class="p">)</span>
+        <span class="n">vectorised</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_vectorise_tokens</span><span class="p">(</span><span class="n">tokenised</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">vectorised</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sentences</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vectorised_tokens</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CreateEvalDatasetForEvaluation</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eval_tokens</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span> <span class="n">eval_targets</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval_tokens</span> <span class="o">=</span> <span class="n">eval_tokens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval_targets</span> <span class="o">=</span> <span class="n">eval_targets</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_targets</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_tokens</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_targets</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Step 2</strong>: Kết hợp transformer encoder và classification head </li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="n">encoder</span> <span class="o">=</span> <span class="n">TransformerEncoder</span><span class="p">(</span>
+    <span class="n">embedding_dim</span><span class="o">=</span><span class="n">EMBEDDING_DIM</span><span class="p">,</span>
+    <span class="n">num_heads</span><span class="o">=</span><span class="n">NUM_HEADS</span><span class="p">,</span>
+    <span class="n">vocab_size</span><span class="o">=</span><span class="n">VOCAB_SIZE</span><span class="p">,</span>
+    <span class="n">max_seq_length</span><span class="o">=</span><span class="n">MAX_LEN</span><span class="p">,</span>
+    <span class="n">FF_dim</span><span class="o">=</span><span class="n">FF_DIM</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span>
+                      <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> 
+                      <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">MAX_LEN</span><span class="o">*</span><span class="n">EMBEDDING_DIM</span><span class="p">,</span> <span class="n">NUM_CLASSES</span><span class="p">))</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">DEVICE</span><span class="p">)</span>
+
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span> <span class="o">=</span> <span class="n">LR</span><span class="p">,</span> <span class="n">amsgrad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">loss_fn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Step 3</strong>: Pre-training (Configs and stuff)</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="n">DEVICE</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+
+<span class="n">VOCAB_SIZE</span> <span class="o">=</span> <span class="mi">20000</span>
+<span class="n">OOV_TOKEN</span> <span class="o">=</span> <span class="s2">&quot;&lt;OOV&gt;&quot;</span>
+<span class="n">PADDING_TYPE</span> <span class="o">=</span> <span class="s2">&quot;post&quot;</span>
+<span class="n">TRUNCATING_TYPE</span> <span class="o">=</span> <span class="s2">&quot;post&quot;</span>
+<span class="n">MAX_LEN</span> <span class="o">=</span> <span class="mi">33</span>
+<span class="n">NUM_TRAINING_RATIO</span> <span class="o">=</span> <span class="mf">0.8</span>
+<span class="n">EMBEDDING_DIM</span> <span class="o">=</span> <span class="mi">256</span>
+<span class="n">NUM_HEADS</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">FF_DIM</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">BATCH_SIZE</span> <span class="o">=</span> <span class="mi">32</span>
+<span class="n">SHUFFLE</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">PIN_MEMORY</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">NUM_CLASSES</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">LR</span> <span class="o">=</span> <span class="mf">3e-4</span>
+<span class="n">NUM_EPOCHS</span> <span class="o">=</span> <span class="mi">100</span>
+
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">&quot;./nlp-getting-started/train.csv&quot;</span><span class="p">)</span>
+<span class="n">train_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="nb">int</span><span class="p">(</span><span class="n">NUM_TRAINING_RATIO</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">))]</span>
+<span class="n">val_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">NUM_TRAINING_RATIO</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)):]</span>
+
+<span class="n">train_ds</span> <span class="o">=</span> <span class="n">CreateTextClassificationDataset</span><span class="p">(</span><span class="n">train_df</span><span class="p">,</span> <span class="n">vocabulary_size</span><span class="o">=</span><span class="n">VOCAB_SIZE</span><span class="p">,</span> <span class="n">oov_token</span><span class="o">=</span><span class="n">OOV_TOKEN</span><span class="p">,</span> <span class="n">padding_type</span><span class="o">=</span><span class="n">PADDING_TYPE</span><span class="p">,</span> <span class="n">truncating_type</span><span class="o">=</span><span class="n">TRUNCATING_TYPE</span><span class="p">,</span> 
+                                     <span class="n">max_len</span><span class="o">=</span><span class="n">MAX_LEN</span><span class="p">)</span>
+
+<span class="n">eval_tokens</span> <span class="o">=</span> <span class="n">train_ds</span><span class="o">.</span><span class="n">_create_vectorised_tokens</span><span class="p">(</span><span class="n">val_df</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<span class="n">eval_targets</span> <span class="o">=</span> <span class="n">val_df</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+<span class="n">eval_ds</span> <span class="o">=</span> <span class="n">CreateEvalDatasetForEvaluation</span><span class="p">(</span><span class="n">eval_tokens</span><span class="p">,</span> <span class="n">eval_targets</span><span class="p">)</span>
+
+<span class="n">train_loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">train_ds</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">=</span> <span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span> <span class="o">=</span> <span class="n">SHUFFLE</span><span class="p">,</span> <span class="n">pin_memory</span> <span class="o">=</span> <span class="n">PIN_MEMORY</span><span class="p">)</span>
+<span class="n">eval_loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">eval_ds</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">=</span> <span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">pin_memory</span><span class="o">=</span><span class="n">PIN_MEMORY</span><span class="p">)</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Step 4</strong>: Training</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">train_1_epoch</span><span class="p">():</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+    <span class="n">loss_sum</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">train_loader</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">DEVICE</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">DEVICE</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+        <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+        <span class="n">loss_sum</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">loss_sum</span>
+
+
+<span class="nd">@torch</span><span class="o">.</span><span class="n">inference_mode</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">evaluate_1_epoch</span><span class="p">():</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="n">loss_sum</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">correct_samples</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_samples</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">eval_loader</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">DEVICE</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">DEVICE</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="n">loss_sum</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">correct_samples</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="n">logits</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">y</span><span class="p">])</span>
+        <span class="n">total_samples</span> <span class="o">+=</span> <span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">loss_sum</span><span class="p">,</span> <span class="n">correct_samples</span> <span class="o">/</span> <span class="n">total_samples</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="n">NUM_EPOCHS</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_EPOCHS</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">train_loss</span> <span class="o">=</span> <span class="n">train_1_epoch</span><span class="p">()</span>
+        <span class="n">val_loss</span><span class="p">,</span> <span class="n">val_acc</span> <span class="o">=</span> <span class="n">evaluate_1_epoch</span><span class="p">()</span>
+
+        <span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span> <span class="s2">&quot;last.pt&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Epoch: </span><span class="si">{</span><span class="n">epoch</span><span class="si">}</span><span class="s2">, Train Loss: </span><span class="si">{</span><span class="n">train_loss</span><span class="si">}</span><span class="s2">, Val Loss: </span><span class="si">{</span><span class="n">val_loss</span><span class="si">}</span><span class="s2">, Val Acc: </span><span class="si">{</span><span class="n">val_acc</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+
+<span class="n">train</span><span class="p">(</span><span class="n">NUM_EPOCHS</span><span class="o">=</span><span class="n">NUM_EPOCHS</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:14&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">13</span>.57it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">86</span>.56it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">1</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">142</span>.10867008566856,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">44</span>.142126590013504,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.5344714379514117
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:11&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">16</span>.63it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">86</span>.23it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">2</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">125</span>.55668744444847,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">29</span>.014512717723846,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.6868023637557452
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:12&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">14</span>.98it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">65</span>.35it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">3</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">112</span>.70439422130585,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">30</span>.35796758532524,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.6625082074852265
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:11&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">16</span>.17it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">83</span>.36it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">4</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">98</span>.53315824270248,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">28</span>.567470982670784,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7150361129349967
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:11&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">16</span>.05it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">67</span>.37it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">5</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">87</span>.58201515674591,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">27</span>.053630746901035,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7071569271175312
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:16&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">11</span>.38it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.34it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">6</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">79</span>.27146698534489,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">29</span>.58349298685789,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7038739330269206
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:16&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">11</span>.73it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.66it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">7</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">71</span>.90403440594673,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">30</span>.562148183584213,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7097833223900197
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:14&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">13</span>.26it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">87</span>.81it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">8</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">60</span>.30563969910145,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">32</span>.01201945543289,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.6841759684832567
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:12&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">14</span>.70it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">86</span>.71it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">9</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">56</span>.01010598987341,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">26</span>.42184019088745,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7504924491135916
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:12&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">15</span>.25it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.39it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">10</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">45</span>.02339556068182,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">30</span>.82352478429675,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7032173342087984
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:16&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">11</span>.55it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">49</span>.44it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">11</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">37</span>.822556521743536,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">40</span>.1178354145959,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7032173342087984
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:16&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">11</span>.56it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.37it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">12</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">28</span>.31721487827599,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">52</span>.655704917619005,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.6001313197636244
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:14&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">13</span>.00it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">84</span>.85it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">13</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">28</span>.7558862734586,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">36</span>.70165067911148,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7557452396585687
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:13&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">14</span>.66it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.40it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">14</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">20</span>.431814706884325,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">30</span>.56316629052162,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7544320420223244
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:15&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">12</span>.38it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">52</span>.52it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">15</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">16</span>.69958796026185,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">36</span>.892881229519844,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7458962573867367
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:16&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">11</span>.93it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">86</span>.53it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">16</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">16</span>.344361373223364,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">36</span>.886749021708965,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7314510833880499
+<span class="m">100</span>%<span class="p">|</span>██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">191</span>/191<span class="w"> </span><span class="o">[</span><span class="m">00</span>:11&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">16</span>.28it/s<span class="o">]</span>
+<span class="m">100</span>%<span class="p">|</span>████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████<span class="p">|</span><span class="w"> </span><span class="m">48</span>/48<span class="w"> </span><span class="o">[</span><span class="m">00</span>:00&lt;<span class="m">00</span>:00,<span class="w"> </span><span class="m">85</span>.07it/s<span class="o">]</span>
+Epoch:<span class="w"> </span><span class="m">17</span>,<span class="w"> </span>Train<span class="w"> </span>Loss:<span class="w"> </span><span class="m">14</span>.930934912525117,<span class="w"> </span>Val<span class="w"> </span>Loss:<span class="w"> </span><span class="m">32</span>.301914274692535,<span class="w"> </span>Val<span class="w"> </span>Acc:<span class="w"> </span><span class="m">0</span>.7386736703873933
+</code></pre></div>
+
+<p>Nhìn chung thì sau khoảng 17 epochs, model đạt 80% accuracy và có dấu hiệu bị overfit nhưng performance vẫn khá ổn.</p>
+<ul>
+<li><strong>Step 5</strong>: Inference</li>
+</ul>
+<p>Bước tiếp theo, mình sẽ thực hiện pipeline inference để chạy trực tiếp trên từng sample. </p>
+<div class="codehilite"><pre><span></span><code><span class="n">sample</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Heard about #earthquake is different cities, stay safe everyone.&quot;</span><span class="p">]</span>
+
+<span class="n">vectorised_sample</span> <span class="o">=</span> <span class="n">train_ds</span><span class="o">.</span><span class="n">_create_vectorised_tokens</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
+<span class="n">vectorised_sample_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">vectorised_sample</span><span class="p">)</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+<span class="n">pred</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">vectorised_sample_torch</span><span class="p">)</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">pred</span> <span class="o">=</span> <span class="s2">&quot;True&quot;</span> <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">&quot;False&quot;</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction of </span><span class="si">{</span><span class="n">sample</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> is </span><span class="si">{</span><span class="n">pred</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Prediction<span class="w"> </span>of<span class="w"> </span>Heard<span class="w"> </span>about<span class="w"> </span><span class="c1">#earthquake is different cities, stay safe everyone. is True</span>
+</code></pre></div>
+
+<h2 id="33-huấn-luyện-và-chạy-mô-hình-transformer-để-dịch-tiếng-anh-sang-tây-ban-nha">3.3. Huấn luyện và chạy mô hình transformer để dịch tiếng Anh sang Tây Ban Nha</h2>
+<h2 id="4-lời-kết">4. Lời kết</h2>
+<h2 id="references">References</h2>
+<p>1. <a href="https://arxiv.org/pdf/1706.03762">Attention is all you need - arXiv</a></p>
+<p>2. <a href="https://www.youtube.com/watch?v=1biZfFLPRSY&amp;t=239s">Positional embeddings in transformers EXPLAINED | Demystifying positional encodings - Youtube</a></p>
+<p>3. <a href="https://www.youtube.com/watch?v=QCJQG4DuHT0">Self Attention in Transformer Neural Networks (with Code!) - Youtube</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code Transformers". Le Hoang Viet's Homepage, March 2024. https://mikyx-1.github.io/blog/transformer.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024transformer,
+  title   = {Giải thích và code Transformers},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {March},
+  url     = {https://mikyx-1.github.io/blog/transformer.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

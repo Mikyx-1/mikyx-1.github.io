@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expectation-Maximisation Explained &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Expectation-Maximisation Explained</h2>
+<p class="date">2024-11-27 &middot; Machine Learning, Statistics</p>
+
+<h2 id="1-problem-statement">1. Problem statement</h2>
+<p>Edmond is an intellectually outstanding student. One day, he is tasked with measuring heights of all the students in his school. The task requires filling in 3 fields: name, gender, and height. Unfortunately, he forgets the gender column and worries that the teacher might notice and think poorly of him. Being a smart and trustworthy student, Edmond cannot let that happen. Determined to fix the mistake, he searches for an efficient and accurate way to fill in the missing information. That is how he comes across the concept of "Expectation-Maximisation". </p>
+<h2 id="2-expectation-maximisation-em">2. Expectation-Maximisation (EM)</h2>
+<figure style="text-align: center">
+<img src="https://upload.wikimedia.org/wikipedia/commons/6/69/EM_Clustering_of_Old_Faithful_data.gif" alt="">
+</figure>
+
+<p>In general, the Expectation-Maximisation (EM) algorithm is used to estimate hidden variables or distributions from observed data when some information is incomplete or missing. It iteratively alternates between assigning probabilities to the missing data (Expectation step) and optimizing parameters based on these assignments (Maximisation step).</p>
+<p>In Edmond's case, the observed data consists of the names and heights of the students, while the missing data is the gender. By applying EM, Edmond can i<strong>nfer the gender</strong> for each recorded height based on statistical patterns, such as the distribution of heights typically associated with different genders in the school population. This allows him to fill in the missing fields accurately, even though the gender information was initially incomplete.</p>
+<h2 id="3-how-it-works">3. How it works</h2>
+<figure style="text-align: center">
+<img src="https://media.geeksforgeeks.org/wp-content/uploads/20190512202126/em11.jpg" alt="">
+</figure>
+
+<p>Given the <em>statistical model</em> which generates a set <span class="math">\mathbf{X}</span> of observed data, a set of unobserved latent data or <em>missing values</em> <span class="math">\mathbf{Z}</span>, and a vector of unknown parameters <span class="math">\theta</span>, along with a <em>likelihood function</em> <span class="math">L(\theta; \mathbf{X}, \mathbf{Z}) = p(\mathbf{X}, \mathbf{Z} \mid \theta)</span> the <em>maximum likelihood estimate</em> (MLE) of the unknown parameters is determined by maximising the <em>marginal likelihood</em> of the observed data:</p>
+<div class="math math-display">L(\theta; \mathbf{X}) = p(\mathbf{X} \mid \theta) = \int p(\mathbf{X}, \mathbf{Z} \mid \theta) p(\mathbf{Z} \mid \theta) \, d\mathbf{Z}.</div>
+<p>However, this quantity is often intractable since <span class="math">\mathbf{Z}</span> is unobserved and the distribution of <span class="math">\mathbf{Z}</span> is unknown before attaining <span class="math">\theta</span>.</p>
+<h2 id="the-em-algorithm">The EM Algorithm</h2>
+<p>The EM algorithm seeks to find the maximum likelihood estimate of the marginal likelihood by iteratively applying these two steps:</p>
+<p><strong>Expectation step (E step):</strong> Define <span class="math">Q(\theta \mid \theta^{(t)})</span> as the <em>expected value</em> of the log <em>likelihood function</em> of <span class="math">\theta</span>, with respect to the current <em>conditional distribution</em> of <span class="math">\mathbf{Z}</span> given <span class="math">\mathbf{X}</span> and the current estimates of the parameters <span class="math">\theta^{(t)}</span>:</p>
+<div class="math math-display">Q(\theta \mid \theta^{(t)}) = \mathbb{E}_{Z \sim p(\cdot \mid \mathbf{X}, \theta^{(t)})} \left[ \log p(\mathbf{X}, \mathbf{Z} \mid \theta) \right].</div>
+<p><strong>Maximization step (M step):</strong> Find the parameters that maximize this quantity:</p>
+<div class="math math-display">\theta^{(t+1)} = \underset{\theta}{\operatorname{arg\,max}} \, Q(\theta \mid \theta^{(t)}).</div>
+<p>More succinctly, we can write it as one equation:</p>
+<div class="math math-display">\theta^{(t+1)} = \underset{\theta}{\operatorname{arg\,max}} \, \mathbb{E}_{Z \sim p(\cdot \mid \mathbf{X}, \theta^{(t)})} \left[ \log p(\mathbf{X}, \mathbf{Z} \mid \theta) \right].</div>
+<h2 id="4-an-hands-on-example">4. An Hands-on example</h2>
+<p>One famous algorithm is usually associated with EM is Gaussian Mixture. Basically, Gaussian Mixture is an unsupervised algorithm that is mostly used to cluster data. In this section, in order to give you a better understanding of how EM and Gaussian mixture work, I will use a simple binomial mixture example. </p>
+<figure style="text-align: center">
+<img src="https://assets.iflscience.com/assets/articleNo/76061/aImg/79018/coin-flips-are-not-50-50-meta.png" alt="">
+</figure>
+
+<p>Imagine that you have two coins with unknown probabilities of heads, denoted p and q respectively. The first coin is chosen with probability <span class="math">\pi</span> and the second is chosen with probability <span class="math">1 - \pi</span>. The chosen coin is flipped once and the result is recorded. <span class="math">x = \{1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1\}</span> (Heads = 1, Tails = 0). Let <span class="math">Z_i \in \{0, 1\}</span> denotes which coin was used on each toss. </p>
+<p>Applying EM to the example, we start by using binary cross entropy (BCE) to determine the similarity between 2 distributions:</p>
+<div class="math math-display">Q(\theta \mid \theta^{(t)}) = \mathbb{E} \left[ \sum_{i}^{n}z_i \log(\pi p^{x_i}(1-p)^{1-x_i}) +  (1-z_i) \log((1-\pi) q^{x_i} (1-q)^{1-x_i}) \right]</div>
+<div class="math math-display">= \sum_{i=1}^n \mathbb{E}[z_i \mid x_i, \theta^{(t)}] \left[ \log \pi + x_i \log p + (1 - x_i) \log (1 - p) \right]</div>
+<div class="math math-display">+ \left( 1 - \mathbb{E}[z_i \mid x_i, \theta^{(t)}] \right) \left[ \log (1 - \pi) + x_i \log q + (1 - x_i) \log (1 - q) \right]</div>
+<p>Next, we compute <span class="math">\mathbb{E}[z_i \mid x_i, \theta^{(t)}]</span>:</p>
+<div class="math math-display">\mu_i^{(t)} = \mathbb{E}[z_i \mid x_i, \theta^{(t)}] = p(z_i = 1 \mid x_i, \theta^{(t)})</div>
+<div class="math math-display">= \frac{p(x_i \mid z_i, \theta^{(t)}) p(z_i = 1 \mid \theta^{(t)})}{p(x_i \mid \theta^{(t)})}</div>
+<div class="math math-display">= \frac{\pi^{(t)} [p^{(t)}]^{x_i} [(1 - p^{(t)})]^{1-x_i}}{\pi^{(t)} [p^{(t)}]^{x_i} [(1 - p^{(t)})]^{1-x_i} + (1 - \pi^{(t)}) [q^{(t)}]^{x_i} [(1 - q^{(t)})]^{1-x_i}}</div>
+<p>Maximising <span class="math">Q(\theta \mid \theta^{(t)})</span> with respect to  <span class="math">\theta</span> yields the update equations:</p>
+<div class="math math-display">\frac{\partial Q(\theta \mid \theta^{(t)})}{\partial \pi} = 0 \implies \pi^{(t+1)} = \frac{1}{n} \sum_i \mu_i^{(t)}</div>
+<div class="math math-display">\frac{\partial Q(\theta \mid \theta^{(t)})}{\partial p} = 0 \implies p^{(t+1)} = \frac{\sum_i \mu_i^{(t)} x_i}{\sum_i \mu_i^{(t)}}</div>
+<div class="math math-display">\frac{\partial Q(\theta \mid \theta^{(t)})}{\partial q} = 0 \implies q^{(t+1)} = \frac{\sum_i (1 - \mu_i^{(t)}) x_i}{\sum_i (1 - \mu_i^{(t)})}.</div>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>EM is an algorithm that helps us determine the hidden distributions of the data in the way we expect. For example, you assume that your coin is tossed by two different coins or two different persons in the aforementioned example and find distributions to determine which one is more likely and which one is less likely for each observation. Similarly, in the case of Edmond, EM can help him distinguish between the heights of male and female students. </p>
+<p>In the blog, I have recapped the motivation behind EM and explained how it works, and I hope it helps. Thanks for reading and see you in the next blog!.</p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Expectation-Maximisation Explained". Le Hoang Viet's Homepage, November 2024. https://mikyx-1.github.io/blog/expectation-maximization.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024expectationmaximization,
+  title   = {Expectation-Maximisation Explained},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {November},
+  url     = {https://mikyx-1.github.io/blog/expectation-maximization.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naive Bayes &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Naive Bayes</h2>
+<p class="date">2024-05-10 &middot; Machine Learning, Classification</p>
+
+<h2 id="1-giới-thiệu">1. Giới thiệu</h2>
+<p>Naive Bayes Classifier là một thuật toán phân loại dựa trên định lý Bayes, với giả định quan trọng là các đặc trưng của dữ liệu đều độc lập có điều kiện với nhau. Dù giả định này có thể không hoàn toàn đúng trong nhiều trường hợp, Naive Bayes vẫn hoạt động hiệu quả trong nhiều ứng dụng thực tế, đặc biệt là các bài toán phân loại văn bản như phát hiện spam, phân tích cảm xúc, và phân loại tài liệu.</p>
+<figure style="text-align: center">
+<img src="https://machinelearningmastery.com/wp-content/uploads/2014/12/naive-bayes-classifier.jpg" alt="">
+</figure>
+
+<p>Naive Bayes được ưa chuộng nhờ vào sự đơn giản trong cài đặt, tốc độ nhanh chóng khi xử lý dữ liệu lớn, và khả năng mở rộng cho nhiều loại dữ liệu khác nhau. Trong bài viết này, chúng ta sẽ đi sâu vào phần toán học phía sau Naive Bayes, các biến thể phổ biến của nó, và phân tích ưu và nhược điểm của phương pháp này.</p>
+<h2 id="2-naive-bayes-classifier---phần-toán">2. Naive Bayes Classifier - Phần toán</h2>
+<h3 id="21-định-lý-bayes">2.1. Định lý Bayes</h3>
+<p>Naive Bayes Classifier dựa trên định lý Bayes, công thức tổng quát như sau:</p>
+<div class="math math-display">P(C \mid X) = \frac{P(X \mid C) \cdot P(C)}{P(X)}</div>
+<p>Thuật toán Naive Bayes tính xác suất của từng class cho một mẫu dữ liệu mới, và chọn class có xác suất cao nhất làm kết quả phân loại. Điểm quan trọng là giả định Naive Bayes đưa ra: các đặc trưng <span class="math">X_i</span> là độc lập có điều kiện dựa trên class <span class="math">C</span>. Điều này cho phép công thức được viết lại dưới dạng:</p>
+<div class="math math-display">P(C \mid X_1, X_2, ..., X_n) \propto P(C) \cdot \prod_{i=1}^{n} P(X_i \mid C)</div>
+<h3 id="22-gaussian-naive-bayes">2.2. Gaussian Naive Bayes</h3>
+<p>Gaussian Naive Bayes (GNB) được sử dụng khi các feature là số và giả định rằng các đặc trưng này tuân theo phân phối Gauss. Với GNB, xác suất <span class="math">P(X_i \mid C)</span> được tính bằng hàm mật độ xác suất của phân phối Gaussian:</p>
+<div class="math math-display">P(X_i \mid C) = \frac{1}{\sqrt{2\pi \sigma_{iC}^2}}exp(-\frac{(X_i - \mu_{iC})^2}{2\sigma_{iC}^2})</div>
+<p>Trong đó, <span class="math">\mu_{iC}</span> và <span class="math">\sigma_{iC}^2</span> là trung bình và phương sai của phân phối Gauss của feature đó trong class <span class="math">C</span>. </p>
+<h3 id="23-multinomial-naive-bayes">2.3. Multinomial Naive Bayes</h3>
+<p>Multinomial Naive Bayes (MNB) chủ yếu được sử dụng cho các bài toán phân loại văn bản, nơi dữ liệu được biểu diễn dưới dạng tần suất hoặc xác suất xuất hiện của các từ (hoặc đặc trưng) trong một tài liệu. Với MNB, xác suất <span class="math">P(X_i \mid C)</span> được tính dựa trên tần suất xuất hiện của từ <span class="math">X_i</span> trong các tài liệu thuộc class <span class="math">C</span>: </p>
+<div class="math math-display">P(X_i \mid C) = \frac{N_{iC} + \alpha}{N_C + \alpha \vert V \vert}</div>
+<p>Trong đó, </p>
+<p>* <span class="math">N_{iC}</span> : tổng số lần xuất hiện của <span class="math">X_i</span> trong các tài liệu thuộc class <span class="math">C</span> </p>
+<p>* <span class="math">N_C</span>: tổng số từ trong các tài liệu ở class <span class="math">C</span></p>
+<p>* <span class="math">\vert  V \vert</span>: kích thước từ vựng</p>
+<p>* <span class="math">\alpha</span>: giá trị làm mượt để tránh bị probability = 0, thường sử dụng Laplace smoothing với <span class="math">\alpha = 1.</span></p>
+<h3 id="24-complement-multinomial-naive-bayes">2.4. Complement multinomial Naive Bayes</h3>
+<p>Complement Naive Bayes (CNB) là một biến thể của MNB, đặc biệt hữu ích cho các tập dữ liệu mất cân bằng. Thay vì tính xác suất <span class="math">P(X_i \mid C)</span> trực tiếp cho một class, CNB tính xác suất của từ <span class="math">X_i</span> trong tất cả các class khác ngoài class <span class="math">C</span>. Điều này giúp CNB hoạt động tốt hơn khi có sự chênh lệch lớn giữa các class.</p>
+<p>Công thức của CNB: </p>
+<div class="math math-display">P(X_i \mid C) = \frac{N_{i \overline{C}} + \alpha}{N_{\overline{C}} + \alpha|V|}</div>
+<p>Trong đó, </p>
+<p>* <span class="math">N_{i \overline{C}}</span>: tổng số lần xuất hiện của <span class="math">X_i</span> trong các tài liệu <strong>không</strong> thuộc class <span class="math">C</span>.</p>
+<p>* <span class="math">N_{\overline{C}}</span>: tổng số từ trong các tài liệu <strong>không thuộc</strong> class <span class="math">C</span>.</p>
+<p>* <span class="math">\vert  V \vert</span>: kích thước từ vựng.</p>
+<p>* <span class="math">\alpha</span>: giá trị làm mượt để tránh bị probability = 0, thường sử dụng Laplace smoothing với <span class="math">\alpha = 1.</span>.</p>
+<h2 id="3-ưu-và-nhược">3. Ưu và nhược</h2>
+<p><strong>Ưu điểm</strong> </p>
+<ul>
+<li>
+<p>Đơn giản và dễ triển khai </p>
+</li>
+<li>
+<p>Không yêu cầu nhiều dữ liệu huấn luyện </p>
+</li>
+<li>
+<p>Xử lý tốt cả dữ liệu số (numerical) và  </p>
+</li>
+<li>
+<p>Thời gian xử lý nhanh</p>
+</li>
+<li>
+<p>Ít bị ảnh hưởng bởi các feature không liên quan (curse of dimensionality)</p>
+</li>
+</ul>
+<p><strong>Nhược điểm</strong></p>
+<ul>
+<li>
+<p>Naive Bayes giả định rằng tất cả các đặc trưng (hoặc yếu tố dự báo) là độc lập, điều này hiếm khi xảy ra trong thực tế. Điều này giới hạn tính ứng dụng của thuật toán trong các trường hợp thực tế.</p>
+</li>
+<li>
+<p>Các ước lượng của nó có thể không chính xác trong một số trường hợp, vì vậy không nên quá tin tưởng và dùng vào các giá trị xác suất mà nó trả về để tham dự các cuộc thi hoặc viết papers. </p>
+</li>
+</ul>
+<h2 id="4-kết-luận">4. Kết luận</h2>
+<p>Naive Bayes là một thuật toán đơn giản nhưng mạnh mẽ, đặc biệt hiệu quả với các bài toán phân loại văn bản và dữ liệu lớn. Tuy có những hạn chế về giả định độc lập và nhạy cảm với dữ liệu hiếm, các biến thể như Complement Naive Bayes có thể khắc phục phần nào những nhược điểm này, giúp mô hình phù hợp hơn cho các bài toán phức tạp và dữ liệu mất cân bằng.</p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://scikit-learn.org/stable/modules/naive_bayes.html">1.9. Naive Bayes - Scikit learn</a><br />
+2. <a href="https://stats.stackexchange.com/questions/126009/complement-naive-bayes?fbclid=IwY2xjawFu5nlleHRuA2FlbQIxMAABHRLpkd8GUz2YboUH8UvGyJLjbqbFZ7MfNNNXZaTfMt81mnVjFWgz34cJvQ_aem_BrGkxexFczlf1946cjxcDg">Complement naive bayes - Cross Validated</a><br />
+3. <a href="https://www.kaggle.com/discussions/getting-started/225022">Naïve Bayes Algorithm's Advantages and Disadvantages - Kaggle</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Naive Bayes". Le Hoang Viet's Homepage, May 2024. https://mikyx-1.github.io/blog/naive-bayes.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024naivebayes,
+  title   = {Naive Bayes},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {May},
+  url     = {https://mikyx-1.github.io/blog/naive-bayes.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

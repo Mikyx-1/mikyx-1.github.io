@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn tính số lượng params trong các mạng Neural Networks - Phần 1 &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Hướng dẫn tính số lượng params trong các mạng Neural Networks - Phần 1</h2>
+<p class="date">2024-04-05 &middot; Neural Networks, Fundamentals</p>
+
+<p>Xin chào các bạn,</p>
+<p>Trong bài post này, mình sẽ hướng dẫn tính thủ công số lượng parameters trong các mạng tích chập.</p>
+<figure style="text-align: center">
+     <img width=1200 height=400 src="https://static.vecteezy.com/system/resources/previews/013/869/695/original/neural-network-illustration-png.png">
+     <figcaption style = "text-align: left">Source: <a href="https://www.vecteezy.com/png/13869695-neural-network-illustration">abcvector</a></figcaption>
+</figure>
+
+<h2 id="1-tại-sao-việc-tính-tay-số-lượng-parameters-lại-quan-trọng-">1. Tại sao việc tính tay số lượng parameters lại quan trọng ?</h2>
+<p>Việc biết tính số lượng parameters của một mô hình sẽ giúp chúng ta có được cái nhìn rõ và tổng quan hơn về mô hình trước khi ta bắt tay xây dựng hoặc deploy nó và việc này sẽ tiết kiệm được kha khá thời gian. Giả sử, khi deploy lên mobile, web, hay edge devices, chúng ta cần tìm mô hình nào có số lượng params ít nhất (càng ít params thì file weights càng nhẹ). Việc đầu tiên các bạn thường làm sẽ là tìm kiếm papers của các model và đọc thử nếu thấy hợp tiêu chí thì sẽ build hoặc clone repo về. Và khi biết được cách tính số lượng params rồi thì ta chỉ cần đọc lướt qua về phần kiến trúc là đã biết được liệu mô hình này liệu có đủ nhẹ để deploy không thay vì phải build và dùng các tools hoặc frameworks để kiểm tra. Ngoài ra, việc biết cách tính số lượng params một cách thủ công còn giúp chúng ta nắm rõ được papers hơn. </p>
+<h2 id="2-cách-tính-số-lượng-params">2. Cách tính số lượng params</h2>
+<p>Mình sẽ hướng dẫn các bạn tính số lượng params trong các mạng cơ bản nhất để có nền tảng để tính các mạng phức tạp hơn. Thực chất, các mạng phức tạp cũng chỉ cấu thành từ những mạng cơ bản. Nếu tính được các mạng cơ bản thì mạng nào chúng ta cũng có thể tính được.</p>
+<h3 id="21-cách-tính-số-lượng-params-cho-mạng-linear">2.1. Cách tính số lượng params cho mạng linear</h3>
+<figure style="text-align: center">
+     <img width=1200 height=400 src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Neural_network.svg/600px-Neural_network.svg.png?20210102213114">
+     <figcaption style = "text-align: left">Source: <a href="https://aldozaimi.wordpress.com/2020/02/13/determine-the-number-of-trainable-parameters-in-a-neural-network/">Aldo Zaimi</a></figcaption>
+</figure>
+
+<p>Theo công thức, mạng linear được tính như sau:</p>
+<div class="math math-display">Z = Weight^T \cdot X + bias</div>
+<p>Với</p>
+<div class="math math-display">X \in R^{D_1*N}</div>
+<div class="math math-display">Weight \in R^{D_1*D_2}</div>
+<div class="math math-display">bias \in R^{D_2*1}</div>
+<div class="math math-display">N:\text{Batch Size}</div>
+<div class="math math-display">D_2: \text{Dimension của layer hiện tại (số lượng neurons trong layer đó)}</div>
+<div class="math math-display">D_1: \text{Dimension của layer trước (số lượng neurons trong layer trước)}</div>
+<p>Vì trong layer này có tổng cộng <span class="math">D_1*D_2</span> weights và <span class="math">D_2</span> của bias, nên tổng cộng có số lượng weights là:</p>
+<p><span class="math math-display">\text{Number of layer's parameters}= D_1*D_2 + D_2</span> </p>
+<p>Trong mạng này, có tổng cộng là 2 layers: layer giữa và layer cuối. Layer đầu ta không tính vì đó là input và trong ví dụ này dimension của input là 2. Vì vậy, ta có cách tính số lượng parameters của mạng này như sau:</p>
+<div class="math math-display">\text{Total parameters} = \text{Number of layer 1's parameters} + \text{Number of layer 2's parameters}</div>
+<div class="math math-display">-&gt; \text{Total parameters} = (5*2 + 5) + (1*5 + 1) = 15 + 6 = 21</div>
+<p>Ta hãy dùng Tensorflow xây dựng và kiểm tra thử liệu số lượng parameters chúng ta tính có đúng không nhé</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="kn">import</span> <span class="n">keras</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keras</span><span class="w"> </span><span class="kn">import</span> <span class="n">layers</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Sequential</span><span class="p">([</span>
+    <span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="p">)),</span>
+    <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span> 
+    <span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="p">])</span>
+
+
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Model: &quot;sequential&quot;
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ dense (Dense)               (None, 5)                 15        
+
+ dense_1 (Dense)             (None, 1)                 6         
+
+=================================================================
+Total params: 21
+Trainable params: 21
+Non-trainable params: 0
+_________________________________________________________________
+</code></pre></div>
+
+<p>Correctamundo!! </p>
+<h3 id="22-cách-tính-số-lượng-params-cho-mạng-convolution">2.2. Cách tính số lượng params cho mạng convolution</h3>
+<figure style="text-align: center">
+     <img width=1200 height=400 src="https://assets.8thlight.com/images/insights/posts/2022-03-25-what-is-a-convolution/multiple_3d_convolutions.png">
+     <figcaption style = "text-align: left">Source: <a href="https://www.google.com/url?sa=i&url=https%3A%2F%2F8thlight.com%2Finsights%2Fwhat-is-a-convolution-how-to-teach-machines-to-see-images&psig=AOvVaw27em9Od3-kybZG_4DqucuD&ust=1712459381592000&source=images&cd=vfe&opi=89978449&ved=0CBQQjhxqFwoTCOiG3rrOrIUDFQAAAAAdAAAAABAJ">Emmanuel Byrd</a></figcaption>
+</figure>
+
+<p>Với mạng convolution, chúng ta sẽ có cách tính hơi khác do cách hoạt động của mạng này khác với mạng linear ở trên. Tuy nhiên, về mặt bản chất, cách tính của chúng tương tự nhau. </p>
+<p>Trong Pytorch, 3 thông số quan trọng bạn phải set cho một layer convolution là <strong>channel_in</strong> và <strong>channel_out</strong>, và <strong>kernel_size</strong>. Đối với Tensorflow chỉ cần 2 thông số out_channels và kernel_size do in_channels sẽ được tự động tìm ra.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">conv_layer</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Có lẽ bạn thắc mắc tại sao 3 thông số này quan trọng? Vì nó sẽ quyết định số lượng parameters của lớp conv đó.</p>
+<p>Mối quan hệ giữa input và output của convolution layer có công thức như sau:</p>
+<div class="math math-display">out(N_i, C_{out_j}) = bias(C_{out_j}) + \sum_{k=0}^{C_{in}-1} weight(C_{out}, k)*input(N_i, k)</div>
+<p>Đoạn code dưới đây minh họa giải thuật tích chập của 1 kernel cho một vùng của ảnh theo công thức trên: </p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Đây là đoạn code để giúp các bạn hiểu hơn về cách hoạt động của một kernel</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="c1"># Giả sử chúng ta có input có kích thước 3x3x3, và kernel 3x3</span>
+<span class="nb">input</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="n">kernel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="n">bias</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># output của nó sẽ như sau:</span>
+<span class="n">output</span> <span class="o">=</span> <span class="p">(</span><span class="n">kernel</span><span class="o">*</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="n">bias</span>
+</code></pre></div>
+
+<p>Nếu bạn set output channels = 16 như đoạn code trên thì PyTorch/Tensorflow sẽ tạo ra 16 kernels cùng kích thước nhưng khác params và mỗi kernel sẽ quét qua input và output ra 1 layer.</p>
+<p>Như ví dụ minh họa trên, với mỗi một kernel ta sẽ có số parameters như sau <span class="math">\text{kernel width} * \text{kernel height} * \text{input channels} + 1 (bias)</span>. Và nếu ta đặt số lượng kernel là <span class="math">C_{out}</span> thì ta sẽ có tổng số lượng parameters trong một convolution layer là:</p>
+<div class="math math-display">\text{Number  parameters of a convolution layer} = \text{kernel width}*\text{kernel height}*\text{input channels}* \text{output channels} + \text{output channels}</div>
+<p>Ví dụ, nếu ta có một tấm ảnh có kích thước <span class="math">Width * Height * 3</span> và ta set cho lớp conv có 16 channels out và kernel size = 3 thì ta sẽ có số lượng parameters như sau:</p>
+<div class="math math-display">\text{Number of parameters} = 3*3*3*16 + 16 = 448</div>
+<p>Ta sẽ kiểm tra thử bằng framework Tensorflow nhé, do Pytorch ở thời điểm chưa hỗ trợ nên mình dùng tạm Tensorflow vậy.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="kn">import</span> <span class="n">keras</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keras</span><span class="w"> </span><span class="kn">import</span> <span class="n">layers</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">Sequential</span><span class="p">([</span>
+     <span class="c1"># Mình set tạm width=height=224 vì nó không ảnh hưởng tới số lượng params</span>
+    <span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">3</span><span class="p">)),</span>
+    <span class="n">layers</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span> 
+<span class="p">])</span>
+
+
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Model: &quot;sequential&quot;
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ conv2d (Conv2D)             (None, 222, 222, 16)      448       
+
+=================================================================
+Total params: 448
+Trainable params: 448
+Non-trainable params: 0
+_________________________________________________________________
+</code></pre></div>
+
+<p>Correctamundo!!</p>
+<p><span style="color:#FFA500;"><b>Lưu ý</b>: Kích thước dài và rộng của input sẽ không ảnh hưởng đến số lượng params, nó chỉ ảnh hưởng đến số phép tính cần thực hiện.</span></p>
+<p>Vì thế, nếu bạn set càng nhiều output channels thì số parameters sẽ càng nhiều. Và nếu các bạn đọc kiến trúc của các mô hình họ thiết kế <strong>càng nhiều output layers thì số lượng parameters của họ</strong> sẽ càng lớn.</p>
+<p>Tuy nhiên, trừ một trường hợp họ sử dụng Depth-wise conv (đây là trường hợp đặc biệt do họ chỉ dùng 1 kernel giống nhau quét qua input <strong>out_channels</strong> lần thay vì dùng <strong>out_channels</strong> kernel khác nhau quét qua input). Mình sẽ giải thích rõ kiến trúc này ở phần sau nha.</p>
+<h2 id="3-kết-luận">3. Kết luận</h2>
+<p>Qua hai ví dụ trên, mình đã hướng dẫn các bạn tính số lượng parameters của hai mạng cơ bản nhất trong neural networks. Hai mạng này đã tạo nên những kiến trúc khổng lồ và hiện đại như ChatGPT, Diffusion, GANs, BERTs nên nếu biết các tính chính xác 2 mạng trên thì bạn có thể tính hoặc nhẩm được 90% các mạng trên thị trường rùi nhé. Còn 10% kia mình sẽ cover ở phần sau nhe.</p>
+<p>Nếu bạn thích bài viết thì hãy ủng hộ mình bằng cách tiếp tục theo dõi và phản hồi lại nếu có gì bạn thấy chưa hợp logic hay không hiểu nhé.</p>
+<h2 id="references">References</h2>
+<ol>
+<li>
+<p><a href="https://pytorch.org/docs/stable/generated/torch.nn.Linear.html">Pytorch documentation - Linear</a></p>
+</li>
+<li>
+<p><a href="https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html">Pytorch documentation - Conv2d</a></p>
+</li>
+</ol>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Hướng dẫn tính số lượng params trong các mạng Neural Networks - Phần 1". Le Hoang Viet's Homepage, April 2024. https://mikyx-1.github.io/blog/param-counting.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024paramcounting,
+  title   = {Hướng dẫn tính số lượng params trong các mạng Neural Networks - Phần 1},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {April},
+  url     = {https://mikyx-1.github.io/blog/param-counting.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

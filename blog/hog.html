@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code thuật toán HOG (Histogram of oriented gradient) &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code thuật toán HOG (Histogram of oriented gradient)</h2>
+<p class="date">2017-01-01 &middot; Computer Vision, Feature Extraction</p>
+
+<p>Xin chào các bạn, <br />
+Trong bài post này, mình sẽ giới thiệu một phương pháp "cổ điển" để extract features của một bức ảnh. Ở thời đại Deep Learning phát triển vượt bậc như hiện nay, các mạng CNN thường được dùng để trích xuất các đặc trưng của bức ảnh. Tuy nhiên, trước khi Yan LeCun đề xuất kiến trúc CNN thì cũng đã có nhiều nghiên cứu về phương pháp để trích xuất features của một bức ảnh và một trong những phương pháp phổ biến nhất đó là Histogram of Oriented Gradients (HOG). Chúng ta hãy cùng tìm hiểu xem HOG là gì và hoạt động như thế nào nhé.</p>
+<p><img alt="Image" src="https://archive.ph/X93ra/a24f8024dd092236524506b3c9e19cd518045fc6.webp" /></p>
+<h2 id="1-giới-thiệu-về-hog">1. Giới thiệu về HOG</h2>
+<p>HOG là một giải thuật trích xuất những điểm đặc trưng trong một bức ảnh và những đặc trưng này có thể được dùng để đưa vào các mô hình phân loại như SVM, Decision Tree, ... cho các task classification, detection, hay thậm chí segmentation. </p>
+<p>Điểm chính trong nguyên lý hoạt động c ủa HOG là mô tả hình dạng của một vật thể cục bộ thông qua hai ma trận: <strong>magnitude gradient</strong> và *<em>orientation gradient</em>. Để tạo ra hai ma trận này, ảnh được chia thành một lưới ô vuông, trên mỗi ô vuông, ta tính toán biểu đồ histogram thống kê độ lớn gradient. Mỗi ô vuông thường có kích thước 8x8 pixels và bao gồm nhiều ô cục bộ. HOG descriptor được tạo thành bằng cách nối liền 4 vector histogram từ mỗi ô cục bộ. HOG descriptor được tạo thành bằng cách nối liền 4 vector histogram từ mỗi ô cục bộ thành một vector tổng hợp. Để cải thiện độ chính xác, mỗi giá trị của vector histogram trên mỗi vùng cục bộ được chuẩn hóa theo Norm 2 hoặc Norm 1. Ưu điểm của HOG là nó bao gồm tính bất biến đối với biến đổi hình học và thay đổi độ sáng, cũng như khả năng loại bỏ chuyển động cơ thể trong phát hiện con người nếu họ duy trì tư thế đứng thẳng. </p>
+<h2 id="2-cách-hoạt-động-của-hog">2. Cách hoạt động của HOG</h2>
+<p>Ở mục 1, mình đã giới thiệu tổng quan về HOG. Giờ thì hãy cùng đào sâu xem nó được hoạt động như thế nào nhé.</p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code thuật toán HOG (Histogram of oriented gradient)". Le Hoang Viet's Homepage, January 2017. https://mikyx-1.github.io/blog/hog.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2017hog,
+  title   = {Giải thích và code thuật toán HOG (Histogram of oriented gradient)},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2017},
+  month   = {January},
+  url     = {https://mikyx-1.github.io/blog/hog.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+</body>
+</html>

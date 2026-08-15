@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giải thích và code giải thuật Canny Edge Detection &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Giải thích và code giải thuật Canny Edge Detection</h2>
+<p class="date">2024-04-28 &middot; Image Processing, Edge Detection</p>
+
+<p>Xin chào các bạn,</p>
+<p>Trong bài post về các <a href="/blog/image-filters-p2.html">bộ lọc phần 2</a>, mình đã giới thiệu về các bộ lọc cạnh và cũng như cách hoạt động của chúng. Ở phần này, mình sẽ giới thiệu một giải thuật cho kết quả vượt trội hơn các phương pháp trước có tên là Canny edge detection. Giải thuật này được phát triển bởi John F. Canny vào năm 1986. Nó bao gồm nhiều bước hậu xử lý để có thể cải thiện kết quả so với các phương pháp dựa vào đạo hàm.</p>
+<h2 id="1-điểm-yếu-của-việc-dùng-đạo-hàm-để-tìm-cạnh">1. Điểm yếu của việc dùng đạo hàm để tìm cạnh</h2>
+<p>Các bộ lọc như Sobel, Prewitt, Laplacian dựa vào <strong>mỗi</strong> giá trị gradient của pixel để  tìm ra cạnh. Tuy nhiên, trong ảnh thu được từ camera sẽ có rất nhiều nguồn nhiễu từ cả bên ngoài và bên trong, và điều này khiến cho các phương pháp này kém ổn đỉnh. </p>
+<h2 id="2-giải-thuật-canny">2. Giải thuật Canny</h2>
+<p>Giải thuật Canny về cơ bản bao gồm 5 bước. Chúng ta hãy cùng xem giải thuật này hoạt động như thế nào và code nó from scratch nhé.</p>
+<p><strong>Bước 1</strong>: Giảm nhiễu<br />
+Để có thể giảm noise và tìm ra các cạnh đáng tin cậy, một bộ lọc thông thấp với mục đích làm mịn ảnh sẽ được áp dụng.</p>
+<p>Bộ lọc có thể tùy ý lựa chọn, các bạn có thể chọn bộ lọc trung bình, trung vị, Gauss, bilateral, ... miễn là nó làm mịn ảnh. Ở đây mình sẽ dùng Gaussian filter để demo.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="c1"># Read image and turn into gray</span>
+<span class="c1"># Can be replaced with any image</span>
+
+<span class="c1"># Step 1: Gaussian Blur</span>
+<span class="n">image</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="s2">&quot;./lena.png&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">blurred</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">GaussianBlur</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/canny-edge/image.png" /></p>
+<p><strong>Bước 2</strong>: Tính gradient và orientation</p>
+<p>Ở bước này, ta sẽ dùng các bộ lọc như ở bài <a href="/blog/image-filters-p2.html">này</a> để có tìm ra được các cạnh trong tấm ảnh. Các bạn có thể dùng bất kì bộ lọc gradient-based nào để tìm cạnh cũng được nhé.</p>
+<p>Ở bước này, ta cần tính cường độ và hướng gradient tăng nhanh nhất (hướng của cạnh). Và điều này được tính theo công thức sau:</p>
+<div class="math math-display">G = \sqrt{G_x^2 + G_y ^2}</div>
+<div class="math math-display">\theta = arctan(\frac{G_y}{G_x})</div>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Step 2: Find all edges</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">sobelFilter</span><span class="p">(</span><span class="n">image</span><span class="p">):</span>
+    <span class="n">image_</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">/</span><span class="mf">255.</span>
+
+    <span class="n">Gx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">Gy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="n">Ix</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image_</span><span class="p">,</span> <span class="n">ddepth</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel</span> <span class="o">=</span> <span class="n">Gx</span><span class="p">)</span>
+    <span class="n">Iy</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">filter2D</span><span class="p">(</span><span class="n">image_</span><span class="p">,</span> <span class="n">ddepth</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel</span><span class="o">=</span><span class="n">Gy</span><span class="p">)</span>
+
+    <span class="n">G</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hypot</span><span class="p">(</span><span class="n">Ix</span><span class="p">,</span> <span class="n">Iy</span><span class="p">)</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">G</span><span class="o">/</span><span class="n">G</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">Iy</span><span class="p">,</span> <span class="n">Ix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span><span class="p">,</span> <span class="n">theta</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="mi">180</span>
+
+<span class="n">G</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">sobelFilter</span><span class="p">(</span><span class="n">blurred</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/canny-edge/image-1.png" /></p>
+<p><strong>Bước 3</strong>: Non-Max Suppression</p>
+<p>Ở bước 2, chúng ta đã lọc ra được gần như tất cả các cạnh trong tấm ảnh, nhưng không phải tất cả chúng đều là cạnh. Vì thế, cần có một bước tắt (suppress) các điểm ảnh mà khả năng cao không phải là cạnh. </p>
+<p>Theta cho chúng ta biết hướng tăng nhanh nhất của gradient (tức là hướng của cạnh phát hiện được), vì vậy nếu tại hướng đó, giá trị biên độ đạo hàm là lớn nhất thì sẽ được giữ lại và nếu không phải thì ta sẽ set về 0. </p>
+<p>Với domain là ảnh, sẽ chỉ có 4 hướng cho một pixel: Hướng ngang, hướng chéo từ trái sang phải, hướng dọc từ trên xuống, hướng chéo từ phải sang trái. Và vì chỉ có 4 hướng nên ta sẽ chia thành các khoảng. Mình sẽ chia đều thành các khoảng như sau:</p>
+<div class="math math-display">0 &lt;= \theta &lt;= 22.5 \text{  or } 157.5 &lt; \theta &lt;= 180 : \text{phương ngang}</div>
+<div class="math math-display">22.5 &lt; \theta &lt;= 67.5: \text{phương chéo từ trái sang phải}</div>
+<div class="math math-display">67.5 &lt; \theta &lt;= 112.5: \text{phương dọc từ trên xuống}</div>
+<div class="math math-display">112.5 &lt; \theta &lt;= 157.5: \text{phương chéo từ phải sang trái}</div>
+<p><img alt="Image" src="https://archive.ph/rUlFC/98bbb6b6f5ed2abafece9c7cd61d8f31ef96ec33.png" /></p>
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nonMaxSuppression</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">image</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">image</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="s2">&quot;Image must be gray, 2D&quot;</span>
+
+    <span class="n">M</span><span class="p">,</span> <span class="n">N</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">Z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+    <span class="n">theta</span><span class="p">[</span><span class="n">theta</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">180</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">M</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">theta</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">22.5</span> <span class="ow">or</span> <span class="mf">157.5</span> <span class="o">&lt;=</span> <span class="n">theta</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">180</span><span class="p">:</span>
+                <span class="n">firstValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">secondValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="mf">22.5</span> <span class="o">&lt;</span> <span class="n">theta</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">67.5</span><span class="p">:</span>
+                <span class="n">firstValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">secondValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="mf">67.5</span> <span class="o">&lt;</span> <span class="n">theta</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">112.5</span><span class="p">:</span>
+                <span class="n">firstValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">secondValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">firstValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">secondValue</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">firstValue</span> <span class="ow">and</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">secondValue</span><span class="p">:</span>
+                <span class="n">Z</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Z</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="n">Z</span>
+
+<span class="n">suppressed</span> <span class="o">=</span> <span class="n">nonMaxSuppression</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/canny-edge/image-2.png" /></p>
+<p><strong>Bước 4</strong>: Double Threshold</p>
+<p>Ở bước 4 này, double threshold sẽ được áp dụng để phân các giá trị pixel ra thành 3 loại: edge, weak edge, not edge.</p>
+<p><img alt="Image" src="https://docs.opencv.org/4.x/hysteresis.jpg" /></p>
+<p>Như ở hình minh họa, nếu giá trị pixel lớn hơn maxVal ta sẽ gán là edge, dưới minVal là not edge, và ở giữa maxVal và minVal là weak edge.</p>
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">threshold</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">lowThreshold</span><span class="o">=</span><span class="mf">0.03</span><span class="p">,</span> <span class="n">highThreshold</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">):</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">image</span><span class="o">&gt;=</span><span class="n">highThreshold</span><span class="p">,</span> <span class="mf">1.</span><span class="p">,</span> <span class="n">image</span><span class="p">)</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">image</span><span class="o">&lt;=</span><span class="n">lowThreshold</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="n">image</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">image</span>
+
+<span class="n">thresholded</span> <span class="o">=</span> <span class="n">threshold</span><span class="p">(</span><span class="n">suppressed</span><span class="p">,</span> <span class="n">lowThreshold</span><span class="o">=</span><span class="mf">0.02</span><span class="p">,</span> <span class="n">highThreshold</span><span class="o">=</span><span class="mf">0.075</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/canny-edge/image-3.png" /></p>
+<p><strong>Bước 5</strong>: Edge Tracking by hysteresis</p>
+<p>Ở bước này, với các weak edge nếu nằm gần strong edge sẽ được đổi thành edge và nếu xung quanh nó không có strong edge thì nó sẽ thành not edge, vì thường các cạnh sẽ được nối liền với nhau chứ không tách rời.</p>
+<p><strong>Code</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hysteresis</span><span class="p">(</span><span class="n">image</span><span class="p">):</span>
+    <span class="n">image_</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">image_</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">copyMakeBorder</span><span class="p">(</span><span class="n">image_</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">BORDER_CONSTANT</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">image_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">image_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.</span> <span class="ow">and</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">1.</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> \
+                    <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> \
+                    <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span> <span class="ow">or</span> <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.</span><span class="p">:</span>
+                    <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">image_</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
+    <span class="k">return</span> <span class="n">image_</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">image_</span> <span class="o">=</span> <span class="n">hysteresis</span><span class="p">(</span><span class="n">thresholded</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Alt text" src="../images/posts/canny-edge/image-4.png" /></p>
+<p>Sau bước 5 này, ảnh kết quả sẽ có 2 giá trị với 0 là not edge và 1 là edge (các đường cam là do lỗi hiển thị). Mình để 2 ảnh nếu chỉ dùng Sobel và dùng Canny để minh họa. Và như các bạn thấy, các cạnh trong phương pháp Canny mỏng hơn và ít có nhiễu hơn so với bộ lọc Sobel. </p>
+<h2 id="3-lời-kết">3. Lời kết</h2>
+<p>Trong phần này, chúng ta đã đi sâu vào việc giải thích và cùng xây dựng thuật toán Canny from scratch. Không chỉ là công cụ để tìm kiếm cạnh trong hình ảnh, thuật toán này còn có thể được sử dụng như một bước tiền xử lý quan trọng cho nhiều ứng dụng khác nhau trong xử lý ảnh, bao gồm việc tìm contours, phát hiện đường thẳng, ...</p>
+<p>Việc hiểu rõ về cách hoạt động của thuật toán Canny không chỉ giúp chúng ta áp dụng nó hiệu quả vào các task khác của mình mà còn là cơ hội để nâng cao kiến thức về xử lý ảnh. Hy vọng rằng thông qua bài viết này, bạn đã có được cái nhìn tổng quan và sự hiểu biết sâu sắc hơn về thuật toán Canny và vai trò quan trọng của nó trong lĩnh vực xử lý ảnh.</p>
+<h2 id="references">References</h2>
+<p>1. <a href="https://docs.opencv.org/4.x/da/d22/tutorial_py_canny.html">Canny Edge Detection - OpenCV</a><br />
+2. <a href="https://towardsdatascience.com/canny-edge-detection-step-by-step-in-python-computer-vision-b49c3a2d8123">Canny Edge Detection Step by Step in Python - Computer Vision - Towards Data Science</a></p>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Giải thích và code giải thuật Canny Edge Detection". Le Hoang Viet's Homepage, April 2024. https://mikyx-1.github.io/blog/canny-edge.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024cannyedge,
+  title   = {Giải thích và code giải thuật Canny Edge Detection},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {April},
+  url     = {https://mikyx-1.github.io/blog/canny-edge.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoRA: Low-Rank Adaptation of Large Language Models &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>LoRA: Low-Rank Adaptation of Large Language Models</h2>
+<p class="date">2024-11-29 &middot; Fine-tuning, LLM</p>
+
+<p>Low-Rank Adaptation (LoRA) was released by Edward Hu and his colleages at Microsoft. The paper was considered game-changing in natural language processing (NLP) field at the time due to its easy implementation and noticeable efficiency.</p>
+<h2 id="1-problem-statement">1. Problem statement</h2>
+<p>Nowadays, we rarely train a new model from scratch but to take an available pre-trained model and fine-tune it on our datasets. Despite that fine-tuning is significantly faster and less computationally expensive, the cost is still high, especially when model sizes grow. </p>
+<p>To tackle that, Edward and his team proposed a technique to cleverly reduce computational cost without affecting the output of the fine-tuning process. </p>
+<h2 id="2-authors-solution">2. Authors' solution</h2>
+<p>A neural network contains many dense layers which perform matrix multiplication. The weight matrices in these layers typically have full-rank. When adapting to a specific task, Aghajanyan et al. (2020) shows that the <strong>pre-trained language moels have a low "intrinsic dimension" and can still learn efficiently despite a random project to a smaller subspace</strong>. Taking advantage of this conclusion, Edward and his team applied it to the fine-tuning phase and found surprisingly good results. For a pre-trained weight matrix <span class="math">W_0 \in \mathbf{R}^{d \times k}</span>, they limit its update by adding a component to weights of a layer. </p>
+<div class="math math-display">h = W_0 x + \Delta W x = W_0x + BAx \quad \text{, where } B \in \mathbf{R}^{d \times r}, A \in \mathbf{R}^{r \times k}</div>
+<p>In the formula above, the rank <span class="math">r \ll min(d, k)</span>.During training, <span class="math">W_0</span> is frozen and does not receive gradient updates, while <span class="math">A</span> and <span class="math">B</span> contain trainable parameters. </p>
+<figure style="text-align: center">
+<img src="https://media.datacamp.com/legacy/v1705430151/image4_b814637cd2.png" alt="">
+</figure>
+
+<p>At the start of a fine-tuning scheme, A is sampled from a random Gaussian distribution while B is a zero matrix, so <span class="math">\Delta W = BA = \mathbf{0}</span>. Additionally, a constant <span class="math">\frac{\alpha}{r}</span> is introduced to the <span class="math">\Delta W</span>. As the constant is not crucial to the fine-tuning, the authors set it to the first rank (<span class="math">r</span>) at each experiment (They tried many ranks but kept <span class="math">\alpha</span> fixed at the initial value). </p>
+<h2 id="3-lets-build-it">3. Let's build it</h2>
+<h2 id="4-conclusion">4. Conclusion</h2>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "LoRA: Low-Rank Adaptation of Large Language Models". Le Hoang Viet's Homepage, November 2024. https://mikyx-1.github.io/blog/lora.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2024lora,
+  title   = {LoRA: Low-Rank Adaptation of Large Language Models},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2024},
+  month   = {November},
+  url     = {https://mikyx-1.github.io/blog/lora.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

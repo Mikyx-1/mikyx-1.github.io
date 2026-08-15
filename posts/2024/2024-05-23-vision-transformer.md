@@ -3,9 +3,9 @@ title: 'Vision Transformer (ViT) - Khi Transformer Học Cách Nhìn'
 date: 2024-05-23
 permalink: /posts/2024/05/vision_transformer/
 tags:
-  - vision transformer
-  - computer vision
-  - architecture 
+  - Transformers
+  - Computer Vision
+  - Architecture
 ---
 
 
