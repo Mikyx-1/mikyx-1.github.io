@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="260" viewBox="0 0 760 260" role="img" aria-labelledby="title desc">
+  <title id="title">Four-bit integer encodings</title>
+  <desc id="desc">The bit patterns 0000 through 1111 interpreted as unsigned values zero through fifteen and signed two's-complement values zero through seven then negative eight through negative one.</desc>
+  <style>
+    text { font-family: Optima, Arial, sans-serif; fill: #111; }
+    .label { font-size: 16px; font-weight: 700; }
+    .small { font-size: 12px; }
+    .bit { font-family: "Lucida Console", monospace; font-size: 11px; }
+    .axis { stroke: #222; stroke-width: 1.5; }
+    .tick { stroke: #777; }
+    .split { stroke: #0645ad; stroke-width: 2; stroke-dasharray: 5 4; }
+    .note { fill: #0645ad; font-size: 13px; }
+  </style>
+  <text x="20" y="25" class="label">Unsigned</text>
+  <line x1="115" y1="55" x2="730" y2="55" class="axis"/>
+  <text x="20" y="122" class="label">Two's complement</text>
+  <line x1="115" y1="152" x2="730" y2="152" class="axis"/>
+  <line x1="423" y1="36" x2="423" y2="190" class="split"/>
+  <text x="433" y="211" class="note">Most-significant bit changes from 0 to 1</text>
+  <g text-anchor="middle">
+    <g transform="translate(115,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0000</text><text y="81" class="small">0</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0000</text><text y="178" class="small">0</text></g>
+    <g transform="translate(156,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0001</text><text y="81" class="small">1</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0001</text><text y="178" class="small">1</text></g>
+    <g transform="translate(197,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0010</text><text y="81" class="small">2</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0010</text><text y="178" class="small">2</text></g>
+    <g transform="translate(238,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0011</text><text y="81" class="small">3</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0011</text><text y="178" class="small">3</text></g>
+    <g transform="translate(279,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0100</text><text y="81" class="small">4</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0100</text><text y="178" class="small">4</text></g>
+    <g transform="translate(320,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0101</text><text y="81" class="small">5</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0101</text><text y="178" class="small">5</text></g>
+    <g transform="translate(361,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0110</text><text y="81" class="small">6</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0110</text><text y="178" class="small">6</text></g>
+    <g transform="translate(402,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">0111</text><text y="81" class="small">7</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">0111</text><text y="178" class="small">7</text></g>
+    <g transform="translate(443,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1000</text><text y="81" class="small">8</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1000</text><text y="178" class="small">−8</text></g>
+    <g transform="translate(484,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1001</text><text y="81" class="small">9</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1001</text><text y="178" class="small">−7</text></g>
+    <g transform="translate(525,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1010</text><text y="81" class="small">10</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1010</text><text y="178" class="small">−6</text></g>
+    <g transform="translate(566,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1011</text><text y="81" class="small">11</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1011</text><text y="178" class="small">−5</text></g>
+    <g transform="translate(607,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1100</text><text y="81" class="small">12</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1100</text><text y="178" class="small">−4</text></g>
+    <g transform="translate(648,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1101</text><text y="81" class="small">13</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1101</text><text y="178" class="small">−3</text></g>
+    <g transform="translate(689,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1110</text><text y="81" class="small">14</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1110</text><text y="178" class="small">−2</text></g>
+    <g transform="translate(730,0)"><line y1="48" y2="62" class="tick"/><text y="42" class="bit">1111</text><text y="81" class="small">15</text><line y1="145" y2="159" class="tick"/><text y="139" class="bit">1111</text><text y="178" class="small">−1</text></g>
+  </g>
+  <text x="20" y="242" class="small">A bit pattern has no numerical meaning until an encoding is specified.</text>
+</svg>

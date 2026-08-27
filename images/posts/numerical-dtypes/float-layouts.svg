@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="390" viewBox="0 0 760 390" role="img" aria-labelledby="title desc">
+  <title id="title">Common machine-learning floating-point layouts</title>
+  <desc id="desc">Rows compare sign, exponent, and trailing significand field widths for FP32, TF32 compute, FP16, BF16, FP8 E4M3, and FP8 E5M2.</desc>
+  <style>
+    text { font-family: Optima, Arial, sans-serif; fill: #111; }
+    .name { font-size: 15px; font-weight: 700; }
+    .field { stroke: #222; stroke-width: 1; }
+    .sign { fill: #ddd; }
+    .exp { fill: #bfc9d7; }
+    .frac { fill: #f5f5f5; }
+    .ft { font-size: 13px; text-anchor: middle; dominant-baseline: middle; }
+    .note { font-size: 12px; fill: #444; }
+    .legend { font-size: 12px; }
+  </style>
+  <text x="10" y="24" class="name">Format</text>
+  <rect x="480" y="11" width="16" height="16" class="field sign"/><text x="502" y="24" class="legend">sign</text>
+  <rect x="545" y="11" width="16" height="16" class="field exp"/><text x="567" y="24" class="legend">exponent</text>
+  <rect x="636" y="11" width="16" height="16" class="field frac"/><text x="658" y="24" class="legend">fraction</text>
+
+  <g transform="translate(0,45)">
+    <text x="10" y="25" class="name">FP32</text>
+    <rect x="130" y="5" width="18" height="34" class="field sign"/><text x="139" y="23" class="ft">1</text>
+    <rect x="148" y="5" width="144" height="34" class="field exp"/><text x="220" y="23" class="ft">8 exponent bits</text>
+    <rect x="292" y="5" width="414" height="34" class="field frac"/><text x="499" y="23" class="ft">23 fraction bits</text>
+    <text x="130" y="54" class="note">32-bit storage</text>
+  </g>
+  <g transform="translate(0,103)">
+    <text x="10" y="25" class="name">TF32 compute</text>
+    <rect x="130" y="5" width="18" height="34" class="field sign"/><text x="139" y="23" class="ft">1</text>
+    <rect x="148" y="5" width="144" height="34" class="field exp"/><text x="220" y="23" class="ft">8 exponent bits</text>
+    <rect x="292" y="5" width="180" height="34" class="field frac"/><text x="382" y="23" class="ft">10 fraction bits</text>
+    <line x1="472" y1="22" x2="706" y2="22" stroke="#777" stroke-dasharray="4 4"/>
+    <text x="130" y="54" class="note">FP32 storage; reduced operand precision in selected operations</text>
+  </g>
+  <g transform="translate(0,161)">
+    <text x="10" y="25" class="name">FP16</text>
+    <rect x="130" y="5" width="36" height="34" class="field sign"/><text x="148" y="23" class="ft">1</text>
+    <rect x="166" y="5" width="180" height="34" class="field exp"/><text x="256" y="23" class="ft">5 exponent bits</text>
+    <rect x="346" y="5" width="360" height="34" class="field frac"/><text x="526" y="23" class="ft">10 fraction bits</text>
+  </g>
+  <g transform="translate(0,219)">
+    <text x="10" y="25" class="name">BF16</text>
+    <rect x="130" y="5" width="36" height="34" class="field sign"/><text x="148" y="23" class="ft">1</text>
+    <rect x="166" y="5" width="288" height="34" class="field exp"/><text x="310" y="23" class="ft">8 exponent bits</text>
+    <rect x="454" y="5" width="252" height="34" class="field frac"/><text x="580" y="23" class="ft">7 fraction bits</text>
+  </g>
+  <g transform="translate(0,277)">
+    <text x="10" y="25" class="name">FP8 E4M3</text>
+    <rect x="130" y="5" width="72" height="34" class="field sign"/><text x="166" y="23" class="ft">1 sign</text>
+    <rect x="202" y="5" width="288" height="34" class="field exp"/><text x="346" y="23" class="ft">4 exponent bits</text>
+    <rect x="490" y="5" width="216" height="34" class="field frac"/><text x="598" y="23" class="ft">3 fraction bits</text>
+  </g>
+  <g transform="translate(0,335)">
+    <text x="10" y="25" class="name">FP8 E5M2</text>
+    <rect x="130" y="5" width="72" height="34" class="field sign"/><text x="166" y="23" class="ft">1 sign</text>
+    <rect x="202" y="5" width="360" height="34" class="field exp"/><text x="382" y="23" class="ft">5 exponent bits</text>
+    <rect x="562" y="5" width="144" height="34" class="field frac"/><text x="634" y="23" class="ft">2 fraction bits</text>
+  </g>
+</svg>

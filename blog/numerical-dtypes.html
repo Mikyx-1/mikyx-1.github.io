@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bits, Range, and Precision: How Numerical Data Types Actually Work &mdash; Le Hoang Viet</title>
+<link rel="icon" href="../images/favicon.ico" sizes="any">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css"
+  integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ"
+  crossorigin="anonymous">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"
+  integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3"
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="topnav">
+  <a href="/index.html">Le Hoang Viet's Homepage</a>
+</div>
+
+<h2>Bits, Range, and Precision: How Numerical Data Types Actually Work</h2>
+<p class="date">2026-08-27 &middot; Numerical Computing, Machine Learning, Quantization</p>
+
+<p>When we say that a model is "in FP16" or that a tensor is "INT8", we compress several decisions into one label. Which bit patterns represent values? Which real numbers are missing? How are intermediate results computed? In what format are sums accumulated? What happens when a result lies between two representable numbers?</p>
+<p>Those questions are not implementation trivia. They determine whether a training run overflows, whether adding a small gradient changes a parameter, how much memory a model occupies, and what information is lost before a quantization algorithm even begins.</p>
+<p>This article develops the common numerical data types used in machine learning from their bits. We will derive their ranges, encode and decode values by hand, examine how arithmetic is rounded, and establish useful error bounds. Statements about mathematical formats are based on IEEE 754-2019 <a href="#ref-1">1</a>; statements about particular accelerator behavior are identified separately because a storage format alone does not determine a complete computation.</p>
+<h2 id="1-a-dtype-is-more-than-a-number-of-bits">1. A dtype is more than a number of bits</h2>
+<p>A numerical data type defines at least two things:</p>
+<ol>
+<li>a finite set of representable values and an encoding from bit patterns to those values;</li>
+<li>rules for operations, conversions, rounding, and exceptional values.</li>
+</ol>
+<p>In machine-learning systems, it is helpful to separate three roles that are often hidden behind one dtype label:</p>
+<ul>
+<li><strong>Storage dtype:</strong> how weights, activations, or optimizer states occupy memory.</li>
+<li><strong>Operand or compute dtype:</strong> the precision presented to an arithmetic unit.</li>
+<li><strong>Accumulator dtype:</strong> the precision used to collect products or partial sums.</li>
+</ul>
+<p>For example, a matrix multiplication can read BF16 operands, multiply them at BF16 precision, accumulate products in FP32, and finally store a BF16 output. Google describes this BF16-multiply/FP32-accumulate pattern for its TPUs <a href="#ref-4">4</a>, while PyTorch documents several backend-dependent choices for reduced-precision matrix multiplication <a href="#ref-7">7</a>. Therefore, "BF16 matrix multiplication" is not a complete numerical specification by itself.</p>
+<p>This distinction will become essential in Part 2. A four-bit weight may occupy four bits in a checkpoint but be unpacked and dequantized before arithmetic. Storage compression and low-precision computation are related, but they are not identical.</p>
+<h2 id="2-integers-exact-values-inside-a-finite-range">2. Integers: exact values inside a finite range</h2>
+<h3 id="21-unsigned-binary">2.1 Unsigned binary</h3>
+<p>For an <span class="math">n</span>-bit unsigned integer with bits <span class="math">b_{n-1}\ldots b_1b_0</span>, positional notation gives</p>
+<div class="math math-display">x = \sum_{i=0}^{n-1} b_i 2^i, \qquad b_i \in \{0,1\}.</div>
+<p>The smallest value is obtained when every bit is zero. The largest is obtained when every bit is one:</p>
+<div class="math math-display">\sum_{i=0}^{n-1}2^i = 2^n-1.</div>
+<p>The equality follows from the finite geometric-series formula. Thus an unsigned <span class="math">n</span>-bit integer represents exactly the integers in</p>
+<div class="math math-display">0 \leq x \leq 2^n-1.</div>
+<p>UINT8, for example, represents the 256 integers from 0 through 255. It does not represent <span class="math">12.5</span>, and it does not approximate it automatically; an application must supply a scale or a conversion rule.</p>
+<h3 id="22-twos-complement-signed-integers">2.2 Two's-complement signed integers</h3>
+<p>Most contemporary systems encode signed integers using two's complement. Its value equation is</p>
+<div class="math math-display">x = -b_{n-1}2^{n-1} + \sum_{i=0}^{n-2} b_i2^i.</div>
+<p>The most significant bit has negative weight. Setting only that bit gives <span class="math">-2^{n-1}</span>; clearing it and setting all remaining bits gives <span class="math">2^{n-1}-1</span>. Therefore</p>
+<div class="math math-display">-2^{n-1} \leq x \leq 2^{n-1}-1.</div>
+<p>For INT8 the range is <span class="math">[-128,127]</span>. Decode the bit pattern <code>11110110</code> directly:</p>
+<div class="math math-display">-128 + 64 + 32 + 16 + 4 + 2 = -10.</div>
+<p>The familiar "invert the bits and add one" procedure gives the magnitude of a negative two's-complement number, but the weighted sum above is the definition and works without a special case.</p>
+<p>Integer addition and multiplication are exact only when the mathematical result remains in range. At the machine-instruction level, fixed-width arithmetic may wrap modulo <span class="math">2^n</span>; numerical libraries may instead widen the accumulator or detect overflow. Quantizers usually <strong>clip</strong> before storing. These are different policies, so one should never infer overflow behavior solely from the word <code>INT8</code>.</p>
+<h3 id="23-int4-and-packing">2.3 INT4 and packing</h3>
+<p>A signed four-bit two's-complement value has range <span class="math">[-8,7]</span>. General-purpose machines do not usually address individual four-bit words. Libraries commonly pack two INT4 values into one byte, then unpack or decode them in a kernel. Consequently, a nominal four-bit tensor also needs layout information: nibble order, signedness, grouping, scales, and sometimes zero-points.</p>
+<figure style="text-align: center">
+  <img src="../images/posts/numerical-dtypes/integer-encoding.svg" alt="Unsigned and two's-complement interpretations of four bits, with values zero to fifteen above and negative eight to seven below">
+  <figcaption><b>Figure 1.</b> The same four bits can denote different values because an encoding is part of the dtype. Diagram by the author.</figcaption>
+</figure>
+
+<h2 id="3-fixed-point-the-bridge-to-integer-quantization">3. Fixed point: the bridge to integer quantization</h2>
+<p>An integer code can stand for a real value when accompanied by a scale <span class="math">s</span> and, optionally, a zero-point <span class="math">z</span>:</p>
+<div class="math math-display">\hat{x} = s(q-z).</div>
+<p>Here <span class="math">q</span> is the stored integer and <span class="math">\hat{x}</span> is the represented real value. With <span class="math">s=0.25</span>, <span class="math">z=0</span>, and <span class="math">q=27</span>, the represented value is <span class="math">6.75</span>. Adjacent integer codes are always separated by <span class="math">0.25</span>, so this is a <strong>uniform</strong> grid.</p>
+<p>Traditional fixed-point notation fixes the binary point by convention. For instance, a format with four fractional bits represents <span class="math">q/16</span>. The scale-and-zero-point expression is more general and is exactly the form we will use for affine integer quantization in Part 2.</p>
+<p>Notice what the dtype cannot tell us here. INT8 provides the code range, but not the real-value range. If <span class="math">s=0.25</span> and <span class="math">z=0</span>, the INT8 codes represent values from <span class="math">-32</span> to <span class="math">31.75</span>. If <span class="math">s=0.01</span>, the same bits cover only <span class="math">[-1.28,1.27]</span> with finer spacing. Range and resolution trade against each other.</p>
+<h2 id="4-floating-point-moving-the-binary-point">4. Floating point: moving the binary point</h2>
+<p>Fixed point uses a constant spacing. Floating point uses an exponent to make the spacing grow with magnitude. A binary floating-point encoding divides its bits into:</p>
+<ul>
+<li>one sign bit <span class="math">s</span>;</li>
+<li><span class="math">w</span> exponent bits storing an unsigned integer <span class="math">E</span>;</li>
+<li><span class="math">t</span> trailing significand bits storing an unsigned integer <span class="math">F</span>.</li>
+</ul>
+<p>The precision is <span class="math">p=t+1</span> significant binary digits for normal numbers because the leading digit is implicit.</p>
+<figure style="text-align: center">
+  <img src="../images/posts/numerical-dtypes/float-layouts.svg" alt="Bit layouts for FP32, TF32 computation, FP16, BF16, FP8 E4M3, and FP8 E5M2">
+  <figcaption><b>Figure 2.</b> Common ML floating-point layouts. TF32 is shown as a compute format, not a 19-bit storage dtype. Diagram by the author, based on [1](#ref-1), [3](#ref-3), [5](#ref-5), and [6](#ref-6).</figcaption>
+</figure>
+
+<h3 id="41-normal-numbers">4.1 Normal numbers</h3>
+<p>For the IEEE binary interchange formats, when <span class="math">0&lt;E&lt;2^w-1</span>, the represented value is</p>
+<div class="math math-display">x=(-1)^s 2^{E-B}\left(1+\frac{F}{2^t}\right),</div>
+<p>where the exponent bias is usually</p>
+<div class="math math-display">B=2^{w-1}-1.</div>
+<p>The leading <span class="math">1</span> is not stored. A normal binary value always has the form <span class="math">1.f_1f_2\ldots f_t \times 2^e</span>, so recovering that predictable bit increases precision without increasing storage.</p>
+<h3 id="42-zeros-and-subnormal-numbers">4.2 Zeros and subnormal numbers</h3>
+<p>The all-zero exponent field is reserved. If <span class="math">E=0</span> and <span class="math">F=0</span>, the value is signed zero. If <span class="math">E=0</span> and <span class="math">F\neq0</span>, the hidden leading digit becomes zero:</p>
+<div class="math math-display">x=(-1)^s 2^{1-B}\left(\frac{F}{2^t}\right).</div>
+<p>These are <strong>subnormal</strong> numbers. They fill the gap between zero and the smallest normal number with constant spacing, providing gradual underflow rather than an abrupt jump to zero. Implementations or performance modes can nevertheless flush subnormals to zero; that behavior must be documented separately from the abstract format.</p>
+<h3 id="43-infinities-and-nans">4.3 Infinities and NaNs</h3>
+<p>For IEEE binary formats, an all-one exponent with a zero fraction represents signed infinity; an all-one exponent with a nonzero fraction represents NaN, or "not a number." NaNs allow invalid results such as <span class="math">0/0</span> to propagate without being confused with an ordinary finite number.</p>
+<p>Not every low-precision ML format copies these special-value rules. The proposed FP8 E4M3 encoding extends its finite range by omitting infinities and reserving fewer patterns for NaNs, whereas E5M2 follows the IEEE convention more closely <a href="#ref-5">5</a>. "FP8" is therefore a family name, not a unique encoding.</p>
+<h2 id="5-encoding-a-floating-point-value-by-hand">5. Encoding a floating-point value by hand</h2>
+<p>Let us encode <span class="math">13.25</span> in IEEE binary16, commonly called FP16.</p>
+<p>First convert the integer and fractional parts:</p>
+<div class="math math-display">13.25_{10}=1101.01_2.</div>
+<p>Normalize it:</p>
+<div class="math math-display">1101.01_2 = 1.10101_2\times2^3.</div>
+<p>Binary16 has five exponent bits, ten stored fraction bits, and bias <span class="math">B=15</span>.</p>
+<ul>
+<li>The number is positive, so <span class="math">s=0</span>.</li>
+<li>The unbiased exponent is <span class="math">3</span>, so <span class="math">E=3+15=18=10010_2</span>.</li>
+<li>Remove the implicit leading one and pad the fraction: <span class="math">F=1010100000_2</span>.</li>
+</ul>
+<p>The complete bit string is</p>
+<div class="codehilite"><pre><span></span><code>sign  exponent  fraction
+ 0     10010    1010100000
+</code></pre></div>
+
+<p>Grouping into hexadecimal digits gives <code>0x4AA0</code>. Decoding the fields returns</p>
+<div class="math math-display">(-1)^0 2^{18-15}\left(1+\frac{672}{1024}\right)
+=8\times1.65625
+=13.25.</div>
+<p>This value is exact because its fractional part is a power-of-two fraction. Decimal <span class="math">0.1</span> behaves differently.</p>
+<h3 id="why-01-repeats-in-binary">Why 0.1 repeats in binary</h3>
+<p>A rational number has a terminating base-two expansion only if its reduced denominator divides some power of two. Since</p>
+<div class="math math-display">0.1=\frac{1}{10}=\frac{1}{2\cdot5},</div>
+<p>and no power of two contains the factor 5, <span class="math">0.1</span> cannot terminate in binary. Its expansion repeats:</p>
+<div class="math math-display">0.1_{10}=0.00011001100110011\ldots_2.</div>
+<p>FP32 stores the nearest representable value under the usual round-to-nearest rule. Its bits are <code>0x3DCCCCCD</code>, whose exact decimal value is approximately <span class="math">0.10000000149011612</span>. The datatype did not calculate the wrong real number; it selected the nearest member of a finite representable set.</p>
+<h2 id="6-spacing-precision-and-rounding">6. Spacing, precision, and rounding</h2>
+<h3 id="61-spacing-inside-a-binade">6.1 Spacing inside a binade</h3>
+<p>Consider normal positive numbers with the same unbiased exponent <span class="math">e</span>. Consecutive fraction codes differ by one, so consecutive values differ by</p>
+<div class="math math-display">2^e\frac{1}{2^t}=2^{e-t}.</div>
+<p>The interval <span class="math">[2^e,2^{e+1})</span> is called a <strong>binade</strong>. Spacing is constant inside a binade and doubles when the exponent increases by one. Floating point therefore supplies approximately constant <em>relative</em> precision, not constant absolute precision.</p>
+<figure style="text-align: center">
+  <img src="../images/posts/numerical-dtypes/float-spacing.svg" alt="Number lines showing dense floating-point values near one and values twice as far apart near two">
+  <figcaption><b>Figure 3.</b> A toy format with three fraction bits. The spacing is <span class="math">2^{-3}</span> on <span class="math">[1,2)</span> and <span class="math">2^{-2}</span> on <span class="math">[2,4)</span>. Diagram by the author.</figcaption>
+</figure>
+
+<p><code>numpy.finfo(dtype).eps</code>-style machine epsilon is usually the distance from <span class="math">1</span> to the next larger value:</p>
+<div class="math math-display">\epsilon = 2^{-t}.</div>
+<p>Numerical error analysis often uses the <strong>unit roundoff</strong>, half that distance for round-to-nearest:</p>
+<div class="math math-display">u=2^{-(t+1)}=2^{-p}.</div>
+<p>These two quantities are sometimes both called "machine epsilon," so a careful article or API should state which convention it uses.</p>
+<h3 id="62-a-local-relative-error-bound">6.2 A local relative-error bound</h3>
+<p>Suppose <span class="math">x</span> is a normal real number in <span class="math">[2^e,2^{e+1})</span>, the rounded result is normal, and no overflow or underflow occurs. Adjacent floats in this binade are <span class="math">2^{e-t}</span> apart. Rounding to the nearest one introduces at most half that distance:</p>
+<div class="math math-display">|\operatorname{fl}(x)-x|\leq2^{e-t-1}.</div>
+<p>Because <span class="math">|x|\geq2^e</span>,</p>
+<div class="math math-display">\frac{|\operatorname{fl}(x)-x|}{|x|}
+\leq2^{-t-1}=u.</div>
+<p>Equivalently,</p>
+<div class="math math-display">\operatorname{fl}(x)=x(1+\delta),\qquad |\delta|\leq u.</div>
+<p>This compact model is powerful, but its conditions matter. It is not a universal relative bound near zero, under overflow, or for arbitrary non-IEEE approximations. Goldberg gives a detailed treatment of ulps, relative error, guard digits, and exact rounding <a href="#ref-2">2</a>.</p>
+<h3 id="63-round-to-nearest-ties-to-even">6.3 Round to nearest, ties to even</h3>
+<p>IEEE 754 defines several rounding-direction attributes. The common default is round to nearest with ties resolved toward the result whose least significant digit is even <a href="#ref-1">1</a>. "Even" makes repeated halfway cases statistically less biased than always rounding upward.</p>
+<p>Imagine a toy format with precision <span class="math">p=4</span>. Near one, its values include</p>
+<div class="codehilite"><pre><span></span><code>1.000₂ = 1.000₁₀
+1.001₂ = 1.125₁₀
+</code></pre></div>
+
+<p>The exact number <span class="math">1.0625=1.0001_2</span> lies halfway. The lower candidate has an even least-significant stored bit, so ties-to-even selects <span class="math">1.000_2</span>.</p>
+<h2 id="7-how-floating-point-arithmetic-is-computed">7. How floating-point arithmetic is computed</h2>
+<p>An operation conceptually computes the exact real result and then rounds it to the destination format. Hardware obtains that result efficiently using extra guard, round, and sticky information rather than an infinitely wide register <a href="#ref-2">2</a>.</p>
+<h3 id="71-addition-and-subtraction">7.1 Addition and subtraction</h3>
+<p>To add two finite floating-point values:</p>
+<ol>
+<li>compare exponents;</li>
+<li>shift the smaller significand to align the binary points;</li>
+<li>add or subtract the signed significands;</li>
+<li>normalize the result;</li>
+<li>round to the destination precision;</li>
+<li>handle overflow, underflow, and special values.</li>
+</ol>
+<p>For an exact example,</p>
+<div class="math math-display">1.5 = 1.10000_2\times2^0,</div>
+<div class="math math-display">0.21875 = 1.11000_2\times2^{-3}
+=0.00111_2\times2^0.</div>
+<p>After alignment,</p>
+<div class="math math-display">1.10000_2+0.00111_2=1.10111_2=1.71875.</div>
+<p>With enough fraction bits this sum is exact. With fewer bits the final significand must be rounded.</p>
+<p>Alignment also explains <strong>absorption</strong>. If the exponents differ by more bits than the available precision, the smaller addend can be shifted entirely beyond the retained significand. Then <span class="math">a+b</span> may round to <span class="math">a</span> even when <span class="math">b\neq0</span>.</p>
+<p>Subtraction has an additional danger: if two approximate inputs are close, leading digits cancel and expose their earlier representation errors. This is catastrophic cancellation. Subtraction itself can still be correctly rounded; the problem is that the exact answer contains much less information than the operands appeared to contain.</p>
+<h3 id="72-multiplication">7.2 Multiplication</h3>
+<p>For normal finite values written as</p>
+<div class="math math-display">x=(-1)^{s_x}m_x2^{e_x},\qquad
+y=(-1)^{s_y}m_y2^{e_y},</div>
+<p>their exact product is</p>
+<div class="math math-display">xy=(-1)^{s_x\oplus s_y}(m_xm_y)2^{e_x+e_y}.</div>
+<p>The hardware XORs the sign bits, adds exponents after accounting for biases, multiplies significands, normalizes, and rounds. The unrounded significand product can need roughly twice the operand precision, which is one reason intermediate precision matters.</p>
+<h3 id="73-fused-multiply-add-and-accumulation">7.3 Fused multiply-add and accumulation</h3>
+<p>A fused multiply-add computes</p>
+<div class="math math-display">\operatorname{fma}(a,b,c)=\operatorname{round}(ab+c)</div>
+<p>with one final rounding, instead of rounding <span class="math">ab</span> first and then rounding the sum. The two expressions can produce different answers.</p>
+<p>A dot product contains many multiply-adds:</p>
+<div class="math math-display">y=\sum_{i=1}^{n}a_ib_i.</div>
+<p>If every term were accumulated in a low-precision format, rounding would be introduced repeatedly. Using a wider accumulator usually reduces this error and extends the range of partial sums. This is why operand precision and accumulator precision must be reported separately in ML benchmarks.</p>
+<p>Under the standard rounding model and assuming <span class="math">nu&lt;1</span>, error analyses of sequential inner products use the abbreviation</p>
+<div class="math math-display">\gamma_n=\frac{nu}{1-nu}.</div>
+<p>For a fused multiply-add sequence there is one rounding per term, leading to a <span class="math">\gamma_n</span>-type bound. Separate rounded multiplications and additions require a correspondingly larger operation count, often expressed with <span class="math">\gamma_{2n}</span> in a simple analysis. The bounds grow approximately linearly with the operation count when that count times <span class="math">u</span> is small. They are worst-case statements, not predictions that every dot product loses that much accuracy; cancellation, data distribution, summation order, fused operations, and accumulator width all affect the observed result. Higham develops this notation and the inner-product bounds rigorously <a href="#ref-10">10</a>.</p>
+<figure style="text-align: center">
+  <img src="../images/posts/numerical-dtypes/floating-addition.svg" alt="Floating-point addition pipeline showing exponent alignment, significand addition, normalization, and rounding">
+  <figcaption><b>Figure 4.</b> The conceptual stages of floating-point addition. Individual processors may pipeline or combine these stages. Diagram by the author.</figcaption>
+</figure>
+
+<h2 id="8-the-ml-dtype-landscape">8. The ML dtype landscape</h2>
+<p>The following table compares formats by their mathematical fields. The maximum finite and minimum normal values are properties of the stated encodings; actual libraries may restrict operations or use different handling for subnormals.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Format</th>
+<th style="text-align: right;">Sign / exponent / trailing bits</th>
+<th style="text-align: right;">Precision <span class="math">p</span></th>
+<th style="text-align: right;">Approx. maximum finite</th>
+<th style="text-align: right;">Approx. minimum positive normal</th>
+<th style="text-align: right;">Unit roundoff <span class="math">u</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP64</td>
+<td style="text-align: right;">1 / 11 / 52</td>
+<td style="text-align: right;">53</td>
+<td style="text-align: right;"><span class="math">1.80\times10^{308}</span></td>
+<td style="text-align: right;"><span class="math">2.23\times10^{-308}</span></td>
+<td style="text-align: right;"><span class="math">2^{-53}</span></td>
+</tr>
+<tr>
+<td>FP32</td>
+<td style="text-align: right;">1 / 8 / 23</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;"><span class="math">3.40\times10^{38}</span></td>
+<td style="text-align: right;"><span class="math">1.18\times10^{-38}</span></td>
+<td style="text-align: right;"><span class="math">2^{-24}</span></td>
+</tr>
+<tr>
+<td>TF32 compute</td>
+<td style="text-align: right;">1 / 8 / 10</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">FP32-like range</td>
+<td style="text-align: right;">FP32-like range</td>
+<td style="text-align: right;"><span class="math">2^{-11}</span></td>
+</tr>
+<tr>
+<td>FP16</td>
+<td style="text-align: right;">1 / 5 / 10</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;"><span class="math">65504</span></td>
+<td style="text-align: right;"><span class="math">6.10\times10^{-5}</span></td>
+<td style="text-align: right;"><span class="math">2^{-11}</span></td>
+</tr>
+<tr>
+<td>BF16</td>
+<td style="text-align: right;">1 / 8 / 7</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;"><span class="math">3.39\times10^{38}</span></td>
+<td style="text-align: right;"><span class="math">1.18\times10^{-38}</span></td>
+<td style="text-align: right;"><span class="math">2^{-8}</span></td>
+</tr>
+<tr>
+<td>FP8 E4M3</td>
+<td style="text-align: right;">1 / 4 / 3</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;"><span class="math">448</span></td>
+<td style="text-align: right;"><span class="math">2^{-6}</span></td>
+<td style="text-align: right;"><span class="math">2^{-4}</span></td>
+</tr>
+<tr>
+<td>FP8 E5M2</td>
+<td style="text-align: right;">1 / 5 / 2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;"><span class="math">57344</span></td>
+<td style="text-align: right;"><span class="math">2^{-14}</span></td>
+<td style="text-align: right;"><span class="math">2^{-3}</span></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="81-fp64-and-fp32">8.1 FP64 and FP32</h3>
+<p>FP64 spends 64 bits to provide a 53-bit significand and a much larger exponent range. It is essential in many scientific-computing problems, but doubling the bytes relative to FP32 increases storage and bandwidth requirements.</p>
+<p>FP32 is the traditional baseline for neural-network training and general GPU numerical work. Its 24-bit precision gives roughly seven reliable decimal digits for a single rounded value, although an algorithm can lose more through conditioning or accumulated error.</p>
+<h3 id="82-fp16-versus-bf16">8.2 FP16 versus BF16</h3>
+<p>FP16 and BF16 both occupy 16 bits, but allocate them differently:</p>
+<ul>
+<li>FP16 uses five exponent and ten trailing fraction bits. It has finer relative precision but a maximum finite value of 65504.</li>
+<li>BF16 uses eight exponent and seven trailing fraction bits. Its normal exponent range matches FP32, but its local spacing is eight times coarser than FP16 because <span class="math">2^{-7}/2^{-10}=8</span>.</li>
+</ul>
+<p>This is a clean example of the range-precision trade-off. The BF16 design and its deep-learning results are studied in Kalamkar et al. <a href="#ref-3">3</a>. Neither format is universally "more accurate": FP16 resolves nearby values more finely when they are in range; BF16 is much less likely to overflow or underflow at FP16's limits.</p>
+<h3 id="83-tf32-is-a-compute-mode">8.3 TF32 is a compute mode</h3>
+<p>NVIDIA's TensorFloat-32 uses an eight-bit exponent and ten explicitly represented fraction bits for selected tensor-core computations <a href="#ref-6">6</a>. Inputs and outputs are ordinarily held in FP32 storage. Calling TF32 a 19-bit tensor storage dtype is therefore misleading; it is better understood as reduced significand precision in a compute path with FP32-like exponent range.</p>
+<p>Because backend settings can enable or disable TF32, two programs with FP32 tensors can execute matrix multiplications at different effective operand precision. Reproducible numerical work must record backend configuration as well as tensor dtypes.</p>
+<h3 id="84-fp8-is-at-least-two-formats">8.4 FP8 is at least two formats</h3>
+<p>E4M3 spends more bits on the significand and is more precise locally. E5M2 spends more bits on the exponent and covers a much larger range. The joint NVIDIA, Arm, and Intel proposal reports E4M3 finite values up to 448 and E5M2 values up to 57344, with different special-value semantics <a href="#ref-5">5</a>.</p>
+<p>At only three or four significant bits, unscaled conversion to FP8 can be severe. Practical systems use scaling recipes, higher-precision accumulation, and format selection by tensor role. Those policies are part of a quantization or mixed-precision system, not consequences of the eight-bit encoding alone.</p>
+<h3 id="85-fp4-and-nf4-are-not-interchangeable">8.5 FP4 and NF4 are not interchangeable</h3>
+<p>FP4 E2M1 is a tiny floating-point encoding with one sign, two exponent, and one trailing significand bit. NVIDIA's documented FP4 quantization scheme has finite values up to magnitude 6 and combines the codes with per-block scales <a href="#ref-8">8</a>.</p>
+<p>NF4, introduced with QLoRA, instead uses a 16-value codebook chosen for approximately normally distributed weights <a href="#ref-9">9</a>. It is non-uniform: code points are not equally spaced, and its four bits are an index into a table rather than a sign/exponent/fraction decomposition. Both use four bits per code, but their mathematics and intended use differ.</p>
+<h3 id="86-integers-versus-floats">8.6 Integers versus floats</h3>
+<p>For quick reference:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Integer format</th>
+<th style="text-align: right;">Exact code range</th>
+<th style="text-align: right;">Adjacent code spacing</th>
+<th>Real-value meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UINT8</td>
+<td style="text-align: right;"><span class="math">[0,255]</span></td>
+<td style="text-align: right;">1</td>
+<td>Requires scale/zero-point for quantized real tensors</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td style="text-align: right;"><span class="math">[-128,127]</span></td>
+<td style="text-align: right;">1</td>
+<td>Requires scale/zero-point for quantized real tensors</td>
+</tr>
+<tr>
+<td>INT4</td>
+<td style="text-align: right;"><span class="math">[-8,7]</span></td>
+<td style="text-align: right;">1</td>
+<td>Usually packed; requires grouping and scale metadata</td>
+</tr>
+</tbody>
+</table></div>
+<p>Integer grids have uniform spacing before scaling. Floating-point grids concentrate codes near zero and spread them out as magnitude grows. NF4 supplies a learned-by-design, distribution-aware codebook. Part 2 will compare these choices as quantizers rather than merely as bit layouts.</p>
+<h2 id="9-three-experiments-you-can-reproduce">9. Three experiments you can reproduce</h2>
+<p>The companion script <code>experiments/numerical-dtypes/numerical_dtypes.py</code> uses only Python's standard library. Run it from the repository root:</p>
+<div class="codehilite"><pre><span></span><code>python3<span class="w"> </span>experiments/numerical-dtypes/numerical_dtypes.py
+</code></pre></div>
+
+<h3 id="experiment-1-inspect-01">Experiment 1: inspect 0.1</h3>
+<p>Python's <code>struct</code> module can round a value to IEEE binary32 storage and expose its bits:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">struct</span>
+
+<span class="n">encoded</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;&gt;f&quot;</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span>
+<span class="n">bits</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s2">&quot;&gt;I&quot;</span><span class="p">,</span> <span class="n">encoded</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">decoded</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s2">&quot;&gt;f&quot;</span><span class="p">,</span> <span class="n">encoded</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;0x</span><span class="si">{</span><span class="n">bits</span><span class="si">:</span><span class="s2">08X</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">decoded</span><span class="si">:</span><span class="s2">.17g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Expected output:</p>
+<div class="codehilite"><pre><span></span><code>0x3DCCCCCD
+0.10000000149011612
+</code></pre></div>
+
+<p>This is a representation result derived from the FP32 format, not an empirical claim about a particular neural network.</p>
+<h3 id="experiment-2-addition-is-not-associative">Experiment 2: addition is not associative</h3>
+<p>Using binary64 values,</p>
+<div class="codehilite"><pre><span></span><code><span class="n">a</span> <span class="o">=</span> <span class="mf">1e16</span>
+<span class="n">b</span> <span class="o">=</span> <span class="o">-</span><span class="mf">1e16</span>
+<span class="n">c</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+<span class="nb">print</span><span class="p">((</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="n">c</span><span class="p">))</span>
+</code></pre></div>
+
+<p>The first expression produces <code>1.0</code>; the second commonly produces <code>0.0</code>. In the second parenthesization, adding <code>1.0</code> to <code>-1e16</code> is too small to change the stored value before <span class="math">a</span> is added. Real addition is associative; rounded floating-point addition is not.</p>
+<h3 id="experiment-3-summation-strategy-matters">Experiment 3: summation strategy matters</h3>
+<p>The script compares an explicit left-to-right accumulation loop with <code>math.fsum</code>, which tracks partial sums more carefully. For <code>[1e16, 1.0, -1e16]</code>, the naive loop returns <code>0.0</code>, while <code>math.fsum</code> returns the exact result <code>1.0</code>. A more accurate algorithm can improve a result without changing the storage dtype. "Use more bits" is only one tool; stable formulations and accumulation strategies matter too.</p>
+<p>These small experiments should not be generalized into performance claims. They isolate format behavior and numerical order, which is precisely what makes them reproducible across a broad range of systems.</p>
+<h2 id="10-a-disciplined-way-to-choose-a-dtype">10. A disciplined way to choose a dtype</h2>
+<p>Choosing a dtype is a constrained numerical-design problem. Ask, in order:</p>
+<ol>
+<li><strong>Range:</strong> Can inputs, intermediate values, and accumulators overflow or underflow?</li>
+<li><strong>Resolution:</strong> At the magnitudes of interest, is the spacing small enough to retain meaningful changes?</li>
+<li><strong>Accumulation:</strong> What dtype actually collects reductions and matrix products?</li>
+<li><strong>Sensitivity:</strong> Is the algorithm well-conditioned, or will small representation errors be amplified?</li>
+<li><strong>Hardware path:</strong> Does the target device execute this format natively, emulate it, or unpack it first?</li>
+<li><strong>Evidence:</strong> Has the complete workload been compared with a higher-precision reference?</li>
+</ol>
+<p>The last question is indispensable. A dtype can satisfy a local error bound while the full algorithm remains inaccurate because the problem is ill-conditioned. Conversely, a neural network can tolerate surprisingly coarse local representations because its learned computation is robust to them. Bit counts alone prove neither outcome.</p>
+<h2 id="11-what-this-establishes-for-quantization">11. What this establishes for quantization</h2>
+<p>We now have the pieces needed to analyze quantization without hand-waving:</p>
+<ul>
+<li>an integer code has a finite exact range;</li>
+<li>a scale and zero-point map integer codes to a uniform real grid;</li>
+<li>floating-point spacing changes with exponent;</li>
+<li>rounding error can be bounded locally when its assumptions hold;</li>
+<li>storage, multiplication, and accumulation can use different precisions;</li>
+<li>fewer bits do not imply proportional speedup without a matching hardware path.</li>
+</ul>
+<p>Part 2 will use these facts to derive affine quantization, clipping and rounding error, per-tensor versus groupwise scales, and the logic behind methods such as LLM.int8(), SmoothQuant, GPTQ, AWQ, and NF4/QLoRA.</p>
+<h2 id="references">References</h2>
+<ol>
+<li><a id="ref-1"></a>IEEE Standards Association. <a href="https://standards.ieee.org/ieee/754/6210/">IEEE 754-2019: IEEE Standard for Floating-Point Arithmetic</a>, 2019.</li>
+<li><a id="ref-2"></a>David Goldberg. <a href="https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html">What Every Computer Scientist Should Know About Floating-Point Arithmetic</a>. <em>ACM Computing Surveys</em>, 23(1), 1991.</li>
+<li><a id="ref-3"></a>Dhiraj Kalamkar et al. <a href="https://arxiv.org/abs/1905.12322">A Study of BFLOAT16 for Deep Learning Training</a>, 2019.</li>
+<li><a id="ref-4"></a>Shibo Wang and Pankaj Kanwar. <a href="https://cloud.google.com/blog/products/ai-machine-learning/bfloat16-the-secret-to-high-performance-on-cloud-tpus">BFloat16: The Secret to High Performance on Cloud TPUs</a>, Google Cloud, 2019.</li>
+<li><a id="ref-5"></a>Paulius Micikevicius et al. <a href="https://arxiv.org/abs/2209.05433">FP8 Formats for Deep Learning</a>, 2022.</li>
+<li><a id="ref-6"></a>NVIDIA. <a href="https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/accuracy-considerations.html">TensorRT: Accuracy Considerations</a>, accessed 2026-08-27.</li>
+<li><a id="ref-7"></a>PyTorch. <a href="https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html">Numerical Accuracy</a>, accessed 2026-08-27.</li>
+<li><a id="ref-8"></a>NVIDIA. <a href="https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/quantized-types-schemes.html">TensorRT Quantization Schemes</a>, accessed 2026-08-27.</li>
+<li><a id="ref-9"></a>Tim Dettmers et al. <a href="https://arxiv.org/abs/2305.14314">QLoRA: Efficient Finetuning of Quantized LLMs</a>, 2023.</li>
+<li><a id="ref-10"></a>Nicholas J. Higham. <a href="https://epubs.siam.org/doi/10.1137/1.9780898718027.ch3">Accuracy and Stability of Numerical Algorithms, Chapter 3: Basics</a>, second edition, SIAM, 2002.</li>
+</ol>
+
+<hr>
+
+<h2>Citation</h2>
+
+<p>Cited as:</p>
+
+<blockquote>Le Hoang Viet. "Bits, Range, and Precision: How Numerical Data Types Actually Work". Le Hoang Viet's Homepage, August 2026. https://mikyx-1.github.io/blog/numerical-dtypes.html</blockquote>
+
+<p>Or the BibTeX entry:</p>
+
+<pre><code>@misc{le2026numericaldtypes,
+  title   = {Bits, Range, and Precision: How Numerical Data Types Actually Work},
+  author  = {Le, Hoang Viet},
+  journal = {Le Hoang Viet's Homepage},
+  year    = {2026},
+  month   = {August},
+  url     = {https://mikyx-1.github.io/blog/numerical-dtypes.html}
+}</code></pre>
+
+<hr>
+<p><a href="../blog.html">&larr; Back to the blog index</a>.
+Send feedback by <a href="mailto:lehoangviet2k@gmail.com">email</a>.</p>
+<script defer>
+window.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".math").forEach(function (el) {
+    katex.render(el.textContent, el, {
+      displayMode: el.classList.contains("math-display"),
+      throwOnError: false,
+    });
+  });
+});
+</script>
+</body>
+</html>

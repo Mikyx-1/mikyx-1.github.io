@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="250" viewBox="0 0 760 250" role="img" aria-labelledby="title desc">
+  <title id="title">Floating-point spacing grows with magnitude</title>
+  <desc id="desc">A toy floating-point format has nine evenly spaced values from one to two, then nine values from two to four with twice the absolute spacing.</desc>
+  <style>
+    text { font-family: Optima, Arial, sans-serif; fill: #111; }
+    .label { font-size: 15px; font-weight: 700; }
+    .small { font-size: 12px; }
+    .axis { stroke: #222; stroke-width: 2; }
+    .tick { stroke: #0645ad; stroke-width: 2; }
+    .guide { stroke: #aaa; stroke-dasharray: 4 4; }
+  </style>
+  <text x="20" y="28" class="label">Toy format: 3 stored fraction bits</text>
+  <text x="20" y="61" class="small">Binade [1, 2): spacing = 2⁻³ = 0.125</text>
+  <line x1="105" y1="95" x2="705" y2="95" class="axis"/>
+  <g class="tick">
+    <line x1="105" y1="84" x2="105" y2="106"/><line x1="180" y1="84" x2="180" y2="106"/>
+    <line x1="255" y1="84" x2="255" y2="106"/><line x1="330" y1="84" x2="330" y2="106"/>
+    <line x1="405" y1="84" x2="405" y2="106"/><line x1="480" y1="84" x2="480" y2="106"/>
+    <line x1="555" y1="84" x2="555" y2="106"/><line x1="630" y1="84" x2="630" y2="106"/>
+    <line x1="705" y1="84" x2="705" y2="106"/>
+  </g>
+  <text x="105" y="124" class="small" text-anchor="middle">1</text><text x="705" y="124" class="small" text-anchor="middle">2</text>
+
+  <text x="20" y="156" class="small">Binade [2, 4): spacing = 2⁻² = 0.25</text>
+  <line x1="105" y1="190" x2="705" y2="190" class="axis"/>
+  <g class="tick">
+    <line x1="105" y1="179" x2="105" y2="201"/><line x1="180" y1="179" x2="180" y2="201"/>
+    <line x1="255" y1="179" x2="255" y2="201"/><line x1="330" y1="179" x2="330" y2="201"/>
+    <line x1="405" y1="179" x2="405" y2="201"/><line x1="480" y1="179" x2="480" y2="201"/>
+    <line x1="555" y1="179" x2="555" y2="201"/><line x1="630" y1="179" x2="630" y2="201"/>
+    <line x1="705" y1="179" x2="705" y2="201"/>
+  </g>
+  <text x="105" y="220" class="small" text-anchor="middle">2</text><text x="705" y="220" class="small" text-anchor="middle">4</text>
+  <line x1="105" y1="107" x2="105" y2="178" class="guide"/><line x1="705" y1="107" x2="705" y2="178" class="guide"/>
+  <text x="380" y="242" class="small" text-anchor="middle">Equal visual widths cover twice the real interval in the second binade.</text>
+</svg>
