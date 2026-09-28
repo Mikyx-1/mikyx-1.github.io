@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="270" viewBox="0 0 860 270" role="img" aria-labelledby="title desc">
+  <title id="title">Signed eight-bit integer structure</title>
+  <desc id="desc">The bit pattern 11111011 in two’s complement. The leftmost sign bit has weight negative 128; the seven remaining bits have positive weights 64 through 1. The zero bit at position 2 excludes weight 4, giving a total of negative 5.</desc>
+  <style>
+    text { font-family: Optima, Arial, sans-serif; fill: #1c2530; }
+    .title { font-size: 19px; font-weight: 700; }
+    .label { font-size: 14px; font-weight: 700; }
+    .index { font-family: "Lucida Console", monospace; font-size: 14px; fill: #435164; }
+    .digit { font-family: "Lucida Console", monospace; font-size: 27px; font-weight: 700; }
+    .weight { font-family: "Lucida Console", monospace; font-size: 15px; }
+    .muted { fill: #7b8794; }
+    .sign { fill: #fce7e2; stroke: #bb5645; stroke-width: 1.5; }
+    .value { fill: #eaf2fb; stroke: #4c78a8; stroke-width: 1.5; }
+    .zero { fill: #f2f4f6; stroke: #9aa6b2; stroke-width: 1.5; }
+  </style>
+  <text x="64" y="30" class="title">Signed 8-bit integer: 11111011</text>
+  <text x="103" y="64" class="label" text-anchor="middle">sign bit</text>
+  <text x="479" y="64" class="label" text-anchor="middle">remaining bits</text>
+  <text x="103" y="92" class="index" text-anchor="middle">b7</text>
+  <rect x="64" y="104" width="78" height="58" rx="7" class="sign"/>
+  <text x="103" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="103" y="195" class="weight" text-anchor="middle">−128</text>
+  <text x="197" y="92" class="index" text-anchor="middle">b6</text>
+  <rect x="158" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="197" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="197" y="195" class="weight" text-anchor="middle">+64</text>
+  <text x="291" y="92" class="index" text-anchor="middle">b5</text>
+  <rect x="252" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="291" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="291" y="195" class="weight" text-anchor="middle">+32</text>
+  <text x="385" y="92" class="index" text-anchor="middle">b4</text>
+  <rect x="346" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="385" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="385" y="195" class="weight" text-anchor="middle">+16</text>
+  <text x="479" y="92" class="index" text-anchor="middle">b3</text>
+  <rect x="440" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="479" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="479" y="195" class="weight" text-anchor="middle">+8</text>
+  <text x="573" y="92" class="index" text-anchor="middle">b2</text>
+  <rect x="534" y="104" width="78" height="58" rx="7" class="zero"/>
+  <text x="573" y="143" class="digit muted" text-anchor="middle">0</text>
+  <text x="573" y="195" class="weight muted" text-anchor="middle">+4</text>
+  <text x="667" y="92" class="index" text-anchor="middle">b1</text>
+  <rect x="628" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="667" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="667" y="195" class="weight" text-anchor="middle">+2</text>
+  <text x="761" y="92" class="index" text-anchor="middle">b0</text>
+  <rect x="722" y="104" width="78" height="58" rx="7" class="value"/>
+  <text x="761" y="143" class="digit" text-anchor="middle">1</text>
+  <text x="761" y="195" class="weight" text-anchor="middle">+1</text>
+  <text x="64" y="235" class="label">Weight of each bit, left to right</text>
+  <text x="64" y="257" class="index">Only the weights under 1-bits are added; b2 is 0, so +4 is omitted.</text>
+</svg>
